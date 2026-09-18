@@ -30,9 +30,12 @@ function result(
 		requestMade: input.requestMade ?? true,
 		requestBytes: input.requestBytes ?? 100,
 		elapsedMilliseconds: input.elapsedMilliseconds ?? 10,
+		choiceConfidence: input.choiceConfidence ?? null,
+		choiceProbabilities: input.choiceProbabilities ?? null,
 		matchProbability: Object.hasOwn(input, "matchProbability")
 			? (input.matchProbability ?? null)
 			: 0.5,
+		matchProbabilitySource: input.matchProbabilitySource ?? "unambiguous-noul",
 		candidateCount: input.candidateCount ?? 2,
 		omittedCandidateCount: input.omittedCandidateCount ?? 0,
 		provenance: input.provenance ?? { provider: "fixture" },

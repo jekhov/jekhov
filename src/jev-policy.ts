@@ -30,13 +30,18 @@ export function validateJevPolicyRequest(
 	}
 	if (!isRecord(input.state)) return denied("request.state must be a JSON object");
 	if (!isRecord(input.questions)) {
-		return denied("request must contain next_element and unambiguous_match questions");
+		return denied("request must contain next_element and optional unambiguous_match questions");
 	}
 	const questionNames = Object.keys(input.questions);
 	const nextElement = input.questions.next_element;
 	const unambiguousMatch = input.questions.unambiguous_match;
-	if (questionNames.length !== 2 || !isRecord(nextElement) || !isRecord(unambiguousMatch)) {
-		return denied("request must contain next_element and unambiguous_match questions");
+	if (
+		(questionNames.length !== 1 && questionNames.length !== 2) ||
+		!questionNames.every((name) => name === "next_element" || name === "unambiguous_match") ||
+		!isRecord(nextElement) ||
+		(unambiguousMatch !== undefined && !isRecord(unambiguousMatch))
+	) {
+		return denied("request must contain next_element and optional unambiguous_match questions");
 	}
 	if (
 		nextElement.type !== "choice" ||
@@ -49,9 +54,10 @@ export function validateJevPolicyRequest(
 		return denied("next_element must be a choice question with at least two criteria");
 	}
 	if (
-		unambiguousMatch.type !== "noul" ||
-		typeof unambiguousMatch.instructions !== "string" ||
-		!unambiguousMatch.instructions.trim()
+		unambiguousMatch !== undefined &&
+		(unambiguousMatch.type !== "noul" ||
+			typeof unambiguousMatch.instructions !== "string" ||
+			!unambiguousMatch.instructions.trim())
 	) {
 		return denied("unambiguous_match must be a noul question");
 	}
@@ -69,6 +75,19 @@ export function validateJevPolicyRequest(
 		return denied("public requests must strip AT Protocol DIDs and URIs");
 	}
 	return { ok: true, value: request };
+}
+
+function probability(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function sameKeys(left: string[], right: string[]): boolean {
+	const sortedLeft = [...left].sort();
+	const sortedRight = [...right].sort();
+	return (
+		sortedLeft.length === sortedRight.length &&
+		sortedLeft.every((key, index) => key === sortedRight[index])
+	);
 }
 
 export function validateJevPolicyResponse(
@@ -91,13 +110,18 @@ export function validateJevPolicyResponse(
 	) {
 		return invalidResponse("response next_element.choice is not one of the request criteria");
 	}
-	const unambiguousMatch = answers.unambiguous_match;
 	if (
-		!isRecord(unambiguousMatch) ||
-		typeof unambiguousMatch.noul !== "number" ||
-		unambiguousMatch.noul < 0 ||
-		unambiguousMatch.noul > 1
+		nextElement.type !== "choice" ||
+		!probability(nextElement.confidence) ||
+		!isRecord(nextElement.probabilities) ||
+		!Object.values(nextElement.probabilities).every(probability) ||
+		!sameKeys(Object.keys(nextElement.probabilities), Object.keys(criteria.criteria))
 	) {
+		return invalidResponse("response next_element telemetry is invalid");
+	}
+	const unambiguousMatch = answers.unambiguous_match;
+	const requestedAmbiguity = Object.hasOwn(questions, "unambiguous_match");
+	if (requestedAmbiguity && (!isRecord(unambiguousMatch) || !probability(unambiguousMatch.noul))) {
 		return invalidResponse("response unambiguous_match.noul must be between 0 and 1");
 	}
 	return { ok: true, value: input };

@@ -58,7 +58,12 @@ describe("runShadowSelection", () => {
 					provenance: { provider: "typesafe", cache_hit: true },
 					usage: { input_tokens: 80 },
 					answers: {
-						next_element: { choice: "c0" },
+						next_element: {
+							type: "choice",
+							choice: "c0",
+							confidence: 0.84,
+							probabilities: { c0: 0.94, none: 0.06 },
+						},
 						unambiguous_match: { noul: 0.96 },
 					},
 				},
@@ -73,7 +78,63 @@ describe("runShadowSelection", () => {
 		if (!result.ok) throw new Error("shadow run should succeed");
 		expect(result.value.status).toBe("proposed");
 		expect(result.value.proposal?.ref).toBe("e2");
+		expect(result.value).toMatchObject({
+			selectionProfile: "choice-with-ambiguity",
+			choiceConfidence: 0.84,
+			choiceProbabilities: { c0: 0.94, none: 0.06 },
+			matchProbability: 0.96,
+			matchProbabilitySource: "unambiguous-noul",
+		});
 		expect(result.value.executed).toBe(false);
+	});
+
+	it("runs the choice-only profile without duplicated candidate state", async () => {
+		const browser: BrowserObserver = {
+			observe: vi.fn().mockResolvedValue({
+				ok: true,
+				value: {
+					url: plan.startUrl,
+					title: "Jackets",
+					snapshot: [{ role: "link", name: "Next", url: "/search?page=2", ref: "e2" }],
+				},
+			}),
+		};
+		const jev: JevEvaluator = {
+			evaluate: vi.fn(async (request) => {
+				expect(request.state.candidates).toEqual([]);
+				expect(request.questions).not.toHaveProperty("unambiguous_match");
+				return {
+					ok: true as const,
+					value: {
+						provenance: { provider: "typesafe" },
+						answers: {
+							next_element: {
+								type: "choice",
+								choice: "c0",
+								confidence: 0.77,
+								probabilities: { c0: 0.91, none: 0.09 },
+							},
+						},
+					},
+				};
+			}),
+		};
+
+		const result = await runShadowSelection(
+			plan,
+			{ browser, jev },
+			{ selectionProfile: "choice-only" },
+		);
+
+		expect(result).toMatchObject({
+			ok: true,
+			value: {
+				selectionProfile: "choice-only",
+				proposal: { ref: "e2" },
+				matchProbability: 0.77,
+				matchProbabilitySource: "choice-confidence",
+			},
+		});
 	});
 
 	it("blocks a redirect before page data reaches Jev", async () => {

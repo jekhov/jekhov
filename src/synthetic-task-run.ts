@@ -9,7 +9,14 @@ import type {
 	SyntheticTaskStep,
 } from "./synthetic-task.js";
 import { parseSyntheticTaskPlan, taskDataClass } from "./synthetic-task.js";
-import type { ActionCandidate, Failure, JevEvaluator, Result, ShadowPlan } from "./types.js";
+import type {
+	ActionCandidate,
+	Failure,
+	JevEvaluator,
+	MatchProbabilitySource,
+	Result,
+	ShadowPlan,
+} from "./types.js";
 
 export interface SyntheticTaskStepReport {
 	stepId: string;
@@ -20,7 +27,10 @@ export interface SyntheticTaskStepReport {
 	omittedCandidateCount: number;
 	requestBytes: number;
 	proposal: ActionCandidate | null;
+	choiceConfidence: number | null;
+	choiceProbabilities: Record<string, number> | null;
 	matchProbability: number | null;
+	matchProbabilitySource: MatchProbabilitySource | null;
 	provenance: Record<string, unknown> | null;
 	usage: unknown;
 	failure: Failure | null;
@@ -136,7 +146,10 @@ export async function runValidatedSyntheticTask(
 		let omittedCandidateCount = 0;
 		let requestBytes = 0;
 		let proposal: ActionCandidate | null = null;
+		let choiceConfidence: number | null = null;
+		let choiceProbabilities: Record<string, number> | null = null;
 		let matchProbability: number | null = null;
+		let matchProbabilitySource: MatchProbabilitySource | null = null;
 		let provenance: Record<string, unknown> | null = null;
 		let usage: unknown = null;
 		let executed = false;
@@ -151,7 +164,10 @@ export async function runValidatedSyntheticTask(
 				omittedCandidateCount,
 				requestBytes,
 				proposal,
+				choiceConfidence,
+				choiceProbabilities,
 				matchProbability,
+				matchProbabilitySource,
 				provenance,
 				usage,
 				failure,
@@ -208,7 +224,10 @@ export async function runValidatedSyntheticTask(
 		const selected = parseSelectionResponse(evaluated.value, collected.value.candidates);
 		if (!selected.ok) return stop(selected.error);
 		proposal = selected.value.candidate;
+		choiceConfidence = selected.value.choiceConfidence;
+		choiceProbabilities = selected.value.choiceProbabilities;
 		matchProbability = selected.value.matchProbability;
+		matchProbabilitySource = selected.value.matchProbabilitySource;
 		provenance = selected.value.provenance;
 		usage = selected.value.usage;
 		if (!proposal) {
@@ -278,7 +297,10 @@ export async function runValidatedSyntheticTask(
 			omittedCandidateCount,
 			requestBytes,
 			proposal,
+			choiceConfidence,
+			choiceProbabilities,
 			matchProbability,
+			matchProbabilitySource,
 			provenance,
 			usage,
 			failure: null,

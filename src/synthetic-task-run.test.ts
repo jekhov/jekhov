@@ -64,19 +64,30 @@ function successfulPage(observations: unknown[]): SyntheticTaskPage {
 function choiceEvaluator(choices: string[]): JevEvaluator {
 	let index = 0;
 	return {
-		evaluate: vi.fn(
-			async (): Promise<Result<unknown>> => ({
+		evaluate: vi.fn(async (request): Promise<Result<unknown>> => {
+			const choice = choices[index++] ?? "none";
+			return {
 				ok: true,
 				value: {
 					provenance: { provider: "fixture" },
 					usage: { input_tokens: 10 },
 					answers: {
-						next_element: { choice: choices[index++] ?? "none" },
+						next_element: {
+							type: "choice",
+							choice,
+							confidence: 0.8,
+							probabilities: Object.fromEntries(
+								Object.keys(request.questions.next_element.criteria).map((key) => [
+									key,
+									key === choice ? 1 : 0,
+								]),
+							),
+						},
 						unambiguous_match: { noul: 0.9 },
 					},
 				},
-			}),
-		),
+			};
+		}),
 	};
 }
 
@@ -110,6 +121,11 @@ describe("runSyntheticTask", () => {
 		});
 		expect(page.verify).toHaveBeenCalledTimes(2);
 		expect(result.value.steps.every((step) => step.executed)).toBe(true);
+		expect(result.value.steps[0]).toMatchObject({
+			choiceConfidence: 0.8,
+			choiceProbabilities: { c0: 1, none: 0 },
+			matchProbabilitySource: "unambiguous-noul",
+		});
 	});
 
 	it("accounts for both selector legs when a live cascade falls back", async () => {

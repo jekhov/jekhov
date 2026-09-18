@@ -160,6 +160,12 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 			{
 				name: "jev",
 				evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+				selectionProfile: "choice-with-ambiguity" as const,
+			},
+			{
+				name: "jev-choice-only",
+				evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+				selectionProfile: "choice-only" as const,
 			},
 		];
 		if (parsedArgs.value.baselineClientPath) {
@@ -170,6 +176,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 					failureCode: "baseline-client-failed",
 					timeoutMs: BASELINE_WRAPPER_TIMEOUT_MS,
 				}),
+				selectionProfile: "choice-with-ambiguity",
 			});
 		}
 		const result = await runEvaluationCorpus(corpus.value, selectors, {

@@ -52,6 +52,6 @@ describe("dated evaluation pricing", () => {
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error(result.error.message);
 		expect(result.value.asOf).toBe("2026-09-18");
-		expect(Object.keys(result.value.selectors)).toEqual(["jev", "baseline"]);
+		expect(Object.keys(result.value.selectors)).toEqual(["jev", "jev-choice-only", "baseline"]);
 	});
 });

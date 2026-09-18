@@ -152,6 +152,49 @@ describe("runEvaluationCorpus", () => {
 		expect(requests.join("\n")).not.toContain("save-one");
 	});
 
+	it("compares the choice-only request profile in the same bounded evaluation", async () => {
+		const requests: SelectionRequest[] = [];
+		const choiceOnly: JevEvaluator = {
+			evaluate: vi.fn(async (request) => {
+				requests.push(request);
+				const choice = request.state.goal === "Continue" ? "c0" : "none";
+				const probabilityKeys = Object.keys(request.questions.next_element.criteria);
+				return {
+					ok: true as const,
+					value: {
+						provenance: { provider: "fixture" },
+						answers: {
+							next_element: {
+								type: "choice",
+								choice,
+								confidence: choice === "none" ? 0.6 : 0.8,
+								probabilities: Object.fromEntries(
+									probabilityKeys.map((key) => [key, key === choice ? 1 : 0]),
+								),
+							},
+						},
+					},
+				};
+			}),
+		};
+
+		const result = await runEvaluationCorpus(corpus, [
+			{ name: "jev-choice-only", evaluator: choiceOnly, selectionProfile: "choice-only" },
+		]);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("evaluation should succeed");
+		expect(requests).toHaveLength(2);
+		expect(requests.every((request) => request.state.candidates.length === 0)).toBe(true);
+		expect(requests.every((request) => !("unambiguous_match" in request.questions))).toBe(true);
+		expect(result.value.selectors[0]?.summary.correct).toBe(2);
+		expect(result.value.selectors[0]?.cases[0]).toMatchObject({
+			choiceConfidence: 0.8,
+			matchProbability: 0.8,
+			matchProbabilitySource: "choice-confidence",
+		});
+	});
+
 	it("rejects cascade selector names that are absent from the run", async () => {
 		const unused: JevEvaluator = { evaluate: vi.fn() };
 

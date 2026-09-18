@@ -43,6 +43,11 @@ describe("runCli evaluate", () => {
 						sourceUrl: "https://example.com/jev-pricing",
 						components: [{ usageField: "input_tokens", usdPerMillion: 0.042 }],
 					},
+					"jev-choice-only": {
+						model: "fixture-jev",
+						sourceUrl: "https://example.com/jev-pricing",
+						components: [{ usageField: "input_tokens", usdPerMillion: 0.042 }],
+					},
 					baseline: {
 						model: "fixture-baseline",
 						sourceUrl: "https://example.com/baseline-pricing",
@@ -62,13 +67,16 @@ const args = Object.fromEntries(process.argv.slice(2).reduce((pairs, value, inde
 const request = JSON.parse(readFileSync(args["--input"], "utf8"));
 const goal = request.state.goal;
 let choice = "none";
-if (goal.includes("next page")) choice = request.state.candidates.find((item) => item.name === "Next")?.id ?? "none";
+if (goal.includes("next page")) choice = Object.entries(request.questions.next_element.criteria).find(([key, description]) => key !== "none" && description.includes('"Next"'))?.[0] ?? "none";
 if (goal.includes("product query") || goal.includes("product size")) choice = "c0";
 if (goal.includes("used items")) choice = "c1";
+const probabilities = Object.fromEntries(Object.keys(request.questions.next_element.criteria).map((key) => [key, key === choice ? 1 : 0]));
+const answers = { next_element: { type: "choice", choice, confidence: 0.9, probabilities } };
+if (request.questions.unambiguous_match) answers.unambiguous_match = { type: "noul", noul: choice === "none" ? 0.2 : 0.9 };
 writeFileSync(args["--output"], JSON.stringify({
   provenance: { provider: "fixture", cache_hit: false },
   usage: { input_tokens: 10, cost_usd: 0.0001 },
-  answers: { next_element: { choice }, unambiguous_match: { noul: choice === "none" ? 0.2 : 0.9 } }
+  answers
 }));
 `,
 			{ mode: 0o600 },
@@ -94,17 +102,28 @@ writeFileSync(args["--output"], JSON.stringify({
 		expect(report.version).toBe(2);
 		expect(report.pricing?.asOf).toBe("2026-09-18");
 		expect(report.requestBudget).toEqual({
-			selectors: 2,
+			selectors: 3,
 			casesPerSelector: 6,
-			maximumRequests: 12,
+			maximumRequests: 18,
 		});
-		expect(report.selectors.map((selector) => selector.summary.correct)).toEqual([6, 6]);
-		expect(report.selectors.map((selector) => selector.summary.requestsMade)).toEqual([5, 5]);
-		expect(report.selectors.map((selector) => selector.summary.cache.misses)).toEqual([5, 5]);
+		expect(report.selectors.map((selector) => selector.name)).toEqual([
+			"jev",
+			"jev-choice-only",
+			"baseline",
+		]);
+		expect(report.selectors.map((selector) => selector.summary.correct)).toEqual([6, 6, 6]);
+		expect(report.selectors.map((selector) => selector.summary.requestsMade)).toEqual([5, 5, 5]);
+		expect(report.selectors.map((selector) => selector.summary.cache.misses)).toEqual([5, 5, 5]);
 		expect(report.selectors.map((selector) => selector.summary.apiListPriceUsd?.complete)).toEqual([
 			true,
 			true,
+			true,
 		]);
+		expect(
+			report.selectors[1]?.cases.every(
+				(item) => item.matchProbabilitySource !== "unambiguous-noul",
+			),
+		).toBe(true);
 		expect(report.cascade?.operatingPoints).toHaveLength(21);
 		expect(report.cascade?.operatingPoints[8]?.threshold).toBe(0.4);
 	});

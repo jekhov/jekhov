@@ -11,6 +11,17 @@ const request = buildSelectionRequest({
 	candidates: [{ id: "c0", ref: "e2", role: "button", name: "Continue", context: [] }],
 });
 
+const choiceOnlyRequest = buildSelectionRequest(
+	{
+		goal: "Continue",
+		action: "click",
+		pageUrl: "data:text/html,test",
+		pageTitle: "Test",
+		candidates: [{ id: "c0", ref: "e2", role: "button", name: "Continue", context: [] }],
+	},
+	{ profile: "choice-only" },
+);
+
 describe("validateJevPolicyRequest", () => {
 	it("accepts bounded Jekhov selection requests and pins the model", () => {
 		const result = validateJevPolicyRequest(request, "synthetic");
@@ -18,6 +29,14 @@ describe("validateJevPolicyRequest", () => {
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error("request should be accepted");
 		expect(result.value).toEqual({ ...request, model: JEV_MODEL });
+	});
+
+	it("accepts the bounded choice-only evaluation profile", () => {
+		const result = validateJevPolicyRequest(choiceOnlyRequest, "synthetic");
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("choice-only request should be accepted");
+		expect(result.value).toEqual({ ...choiceOnlyRequest, model: JEV_MODEL });
 	});
 
 	it.each([
@@ -31,7 +50,7 @@ describe("validateJevPolicyRequest", () => {
 		[
 			"synthetic",
 			{ ...request, questions: {} },
-			"request must contain next_element and unambiguous_match questions",
+			"request must contain next_element and optional unambiguous_match questions",
 		],
 		[
 			"synthetic",
@@ -81,13 +100,38 @@ describe("validateJevPolicyResponse", () => {
 		const response = {
 			model: JEV_MODEL,
 			answers: {
-				next_element: { type: "choice", choice: "c0", confidence: 0.9 },
+				next_element: {
+					type: "choice",
+					choice: "c0",
+					confidence: 0.9,
+					probabilities: { c0: 0.95, none: 0.05 },
+				},
 				unambiguous_match: { type: "noul", noul: 0.92 },
 			},
 			usage: { input_tokens: 10, output_tokens: 2 },
 		};
 
 		expect(validateJevPolicyResponse(response, request.questions)).toEqual({
+			ok: true,
+			value: response,
+		});
+	});
+
+	it("accepts a choice-only response with the complete Choice distribution", () => {
+		const response = {
+			model: JEV_MODEL,
+			answers: {
+				next_element: {
+					type: "choice",
+					choice: "c0",
+					confidence: 0.8,
+					probabilities: { c0: 0.9, none: 0.1 },
+				},
+			},
+			usage: { input_tokens: 8, output_tokens: 1 },
+		};
+
+		expect(validateJevPolicyResponse(response, choiceOnlyRequest.questions)).toEqual({
 			ok: true,
 			value: response,
 		});
@@ -104,7 +148,12 @@ describe("validateJevPolicyResponse", () => {
 			{
 				model: JEV_MODEL,
 				answers: {
-					next_element: { choice: "c0" },
+					next_element: {
+						type: "choice",
+						choice: "c0",
+						confidence: 0.9,
+						probabilities: { c0: 0.95, none: 0.05 },
+					},
 					unambiguous_match: { noul: 2 },
 				},
 			},
@@ -114,6 +163,27 @@ describe("validateJevPolicyResponse", () => {
 		expect(validateJevPolicyResponse(response, request.questions)).toEqual({
 			ok: false,
 			error: { code: "invalid-jev-response", message },
+		});
+	});
+
+	it("rejects incomplete Choice telemetry from the provider", () => {
+		expect(
+			validateJevPolicyResponse(
+				{
+					model: JEV_MODEL,
+					answers: {
+						next_element: { type: "choice", choice: "c0", confidence: 0.9 },
+						unambiguous_match: { type: "noul", noul: 0.92 },
+					},
+				},
+				request.questions,
+			),
+		).toEqual({
+			ok: false,
+			error: {
+				code: "invalid-jev-response",
+				message: "response next_element telemetry is invalid",
+			},
 		});
 	});
 });

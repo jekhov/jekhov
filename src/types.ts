@@ -75,26 +75,40 @@ export interface NoulQuestion {
 	instructions: string;
 }
 
-export interface SelectionRequest {
-	state: {
-		goal: string;
-		intended_action: BrowserAction;
-		page: { title: string; url: string };
-		candidates: Array<{
-			id: string;
-			role: string;
-			name: string;
-			context: string[];
-			url?: string;
-			placeholder?: string;
-			cursor?: string;
-		}>;
+export type SelectionProfile = "choice-only" | "choice-with-ambiguity";
+export type MatchProbabilitySource = "choice-confidence" | "unambiguous-noul";
+
+export interface SelectionState {
+	goal: string;
+	intended_action: BrowserAction;
+	page: { title: string; url: string };
+	candidates: Array<{
+		id: string;
+		role: string;
+		name: string;
+		context: string[];
+		url?: string;
+		placeholder?: string;
+		cursor?: string;
+	}>;
+}
+
+export interface ChoiceOnlySelectionRequest {
+	state: SelectionState;
+	questions: {
+		next_element: ChoiceQuestion;
 	};
+}
+
+export interface ChoiceWithAmbiguitySelectionRequest {
+	state: SelectionState;
 	questions: {
 		next_element: ChoiceQuestion;
 		unambiguous_match: NoulQuestion;
 	};
 }
+
+export type SelectionRequest = ChoiceOnlySelectionRequest | ChoiceWithAmbiguitySelectionRequest;
 
 export interface JevEvaluator {
 	maximumRequestCount?: number;
@@ -103,13 +117,17 @@ export interface JevEvaluator {
 
 export interface ParsedSelection {
 	candidate: ActionCandidate | null;
+	choiceConfidence: number | null;
+	choiceProbabilities: Record<string, number> | null;
 	matchProbability: number;
+	matchProbabilitySource: MatchProbabilitySource;
 	provenance: Record<string, unknown>;
 	usage: unknown;
 }
 
 export interface ShadowReport {
 	mode: "shadow";
+	selectionProfile: SelectionProfile;
 	status: "abstained" | "no-candidates" | "proposed";
 	executed: false;
 	stepId: string;
@@ -119,7 +137,10 @@ export interface ShadowReport {
 	omittedCandidateCount: number;
 	requestBytes: number;
 	proposal: ActionCandidate | null;
+	choiceConfidence: number | null;
+	choiceProbabilities: Record<string, number> | null;
 	matchProbability: number | null;
+	matchProbabilitySource: MatchProbabilitySource | null;
 	provenance: Record<string, unknown> | null;
 	usage: unknown;
 }

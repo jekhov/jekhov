@@ -16,13 +16,20 @@ import {
 import { type EvaluationCorpus, parseEvaluationCorpus } from "./evaluation-corpus.js";
 import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
 import { runShadowSelection } from "./shadow-run.js";
-import type { BrowserObserver, JevEvaluator, Result, SelectionRequest } from "./types.js";
+import type {
+	BrowserObserver,
+	JevEvaluator,
+	Result,
+	SelectionProfile,
+	SelectionRequest,
+} from "./types.js";
 
 const MAX_SELECTORS = 8;
 
 export interface EvaluationSelector {
 	name: string;
 	evaluator: JevEvaluator;
+	selectionProfile?: SelectionProfile;
 }
 
 export interface EvaluationSelectorReport {
@@ -113,10 +120,16 @@ export async function runEvaluationCorpus(
 				},
 			};
 			const startedAt = now();
-			const result = await runShadowSelection(evaluationCase.plan, {
-				browser: replayObserver(evaluationCase.observation),
-				jev: trackingEvaluator,
-			});
+			const result = await runShadowSelection(
+				evaluationCase.plan,
+				{
+					browser: replayObserver(evaluationCase.observation),
+					jev: trackingEvaluator,
+				},
+				{
+					selectionProfile: selector.selectionProfile ?? "choice-with-ambiguity",
+				},
+			);
 			const elapsedMilliseconds = Math.max(0, now() - startedAt);
 
 			if (!result.ok) {
@@ -131,7 +144,10 @@ export async function runEvaluationCorpus(
 					requestMade,
 					requestBytes,
 					elapsedMilliseconds,
+					choiceConfidence: null,
+					choiceProbabilities: null,
 					matchProbability: null,
+					matchProbabilitySource: null,
 					candidateCount: candidates.value.candidates.length,
 					omittedCandidateCount: candidates.value.omittedCount,
 					provenance: null,
@@ -153,7 +169,10 @@ export async function runEvaluationCorpus(
 				requestMade,
 				requestBytes,
 				elapsedMilliseconds,
+				choiceConfidence: result.value.choiceConfidence,
+				choiceProbabilities: result.value.choiceProbabilities,
 				matchProbability: result.value.matchProbability,
+				matchProbabilitySource: result.value.matchProbabilitySource,
 				candidateCount: candidates.value.candidates.length,
 				omittedCandidateCount: candidates.value.omittedCount,
 				provenance: result.value.provenance,

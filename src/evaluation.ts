@@ -1,7 +1,7 @@
 // pattern: Functional Core
 
 import { estimateUsageCost, type SelectorPricing } from "./pricing.js";
-import type { BrowserAction, Failure } from "./types.js";
+import type { BrowserAction, Failure, MatchProbabilitySource } from "./types.js";
 
 export type EvaluationOutcome =
 	| "correct-abstention"
@@ -24,7 +24,10 @@ export interface EvaluationCaseResult {
 	requestMade: boolean;
 	requestBytes: number;
 	elapsedMilliseconds: number;
+	choiceConfidence: number | null;
+	choiceProbabilities: Record<string, number> | null;
 	matchProbability: number | null;
+	matchProbabilitySource: MatchProbabilitySource | null;
 	candidateCount: number;
 	omittedCandidateCount: number;
 	provenance: Record<string, unknown> | null;

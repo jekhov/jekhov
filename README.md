@@ -82,8 +82,8 @@ node dist/cli.js shadow --plan examples/synthetic-plan.json
 
 `--jev-client /path/to/compatible-wrapper.mjs` remains available for an audited replacement. A
 report includes request bytes, provider usage, cache status, elapsed time, the chosen candidate or
-abstention, and `executed: false`. Each shadow step makes at most one Jev request containing one
-choice question and one ambiguity-probability question.
+abstention, Choice confidence and probabilities, and `executed: false`. Each shadow step makes at
+most one Jev request containing one choice question and one ambiguity-probability question.
 
 ## Existing Playwright pages
 
@@ -202,13 +202,17 @@ node dist/cli.js evaluate \
   --output reports/synthetic-v2.json
 ```
 
-Omit `--baseline-client` for a Jev-only labeled evaluation. Supplying it enables the paired offline
-cascade sweep.
+Every evaluation compares the full Jev request with a `jev-choice-only` profile that removes the
+ambiguity question and duplicate candidate state. Omit `--baseline-client` to compare only those
+two Jev profiles. Supplying it also enables the paired offline cascade sweep using the full Jev
+profile as primary.
 
 Evaluation replays observations without launching a browser, runs sequentially, makes at most one
 request per selector per case, and always reports `executed: false`. Reports separate explicit
 abstention from deterministic no-candidate cases and include candidate accuracy, proposal precision,
 request size, cache-separated latency, usage, and dated list-price estimates when configured.
+Per-case results retain Jev's Choice confidence, full probability distribution, and the signal used
+as match probability so the two profiles can be calibrated rather than reduced to hard choices.
 
 The report also simulates Jev-first cascades across declared confidence thresholds. Those operating
 points are descriptive offline calibration, not production action thresholds or full Playwright-agent

@@ -99,9 +99,15 @@ Selectors run sequentially in corpus order. The request budget is fixed before t
 no selector request. Wrapper failures remain case-level errors so one outage does not silently
 remove the rest of a comparison.
 
+The default evaluation runs two Jev profiles over every case. `jev` uses the full request with a
+Choice plus ambiguity Noul. `jev-choice-only` removes that Noul and the duplicate candidate array
+from state. Both preserve Choice confidence and the complete probability distribution. This is an
+offline A/B comparison; live shadow and action paths continue to use the conservative full profile.
+
 Version 2 reports include per-case outcomes and aggregate accuracy, proposal precision, provider
 abstention, pipeline abstention, request bytes, cache-separated latency, numeric usage fields, and
-wrapper-reported USD cost. Each report hashes the normalized corpus, including its labels. An
+wrapper-reported USD cost, Choice confidence and probability distributions, and the source of each
+match probability. Each report hashes the normalized corpus, including its labels. An
 optional dated pricing file can translate usage into an API list-price estimate; this remains
 separate from provider-reported cost and records whether every request was priceable.
 

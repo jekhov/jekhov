@@ -53,7 +53,9 @@ Invariant: `executed` is `false` and provider usage is zero.
 ## Selection request
 
 The bounded Jev input containing the step goal, intended browser action, minimized page metadata,
-compact candidate metadata, one choice question, and one ambiguity-probability question.
+compact candidate metadata, and one choice question. The full production profile also includes one
+ambiguity-probability question; the evaluation-only choice profile omits that question and duplicate
+candidate state.
 
 Not: the accessibility snapshot or a general browser-control prompt.
 
@@ -61,12 +63,23 @@ Invariant: the request contains no Playwright element references or URL query va
 
 ## Match probability
 
-Jev's answer to whether exactly one candidate clearly advances the stated goal with the intended
-action.
+The calibrated selection signal. The full profile uses Jev's answer to whether exactly one candidate
+clearly advances the stated goal with the intended action. The choice-only evaluation profile uses
+Choice confidence while retaining the complete candidate probability distribution.
 
 Not: the probability that the proposed action is safe, authorized, or correct end to end.
 
 Invariant: it cannot become an action gate until calibrated for the intended action class.
+
+## Choice telemetry
+
+Jev's confidence and complete candidate probability distribution for a bounded Choice answer.
+
+Not: an action authorization or a substitute for deterministic safety and oracle gates.
+
+Invariant: every declared candidate and the explicit `none` option has exactly one finite
+probability, and the report records whether Choice confidence or the ambiguity Noul supplied the
+match probability.
 
 ## Source policy
 
