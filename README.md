@@ -6,7 +6,7 @@ more resilient by using [Jev](https://typesafe.ai/) only where element selection
 The workflow, next action, and success condition stay deterministic. Jekhov chooses an eligible
 target or abstains behind explicit policy, budget, and data boundaries.
 
-Status: experimental `0.1.0`. The public-site runner remains shadow-only. A separately labeled,
+Status: experimental `0.1.1`. The public-site runner remains shadow-only. A separately labeled,
 synthetic-only task harness can execute complete multi-step fixtures and a pinned MiniWoB++ slice
 behind an exact oracle gate.
 

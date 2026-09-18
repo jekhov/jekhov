@@ -1,6 +1,6 @@
 {
 	"name": "jekhov",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Policy-bounded Jev element selection for known Playwright workflows.",
 	"type": "module",
 	"sideEffects": false,

@@ -104,7 +104,7 @@ describe("runEvaluationCorpus", () => {
 		expect(calls).toEqual(["Continue", "Save", "Continue", "Save"]);
 		expect(result.value).toMatchObject({
 			version: 2,
-			jekhovVersion: "0.1.0",
+			jekhovVersion: "0.1.1",
 			generatedAt: "2026-09-18T12:00:00.000Z",
 			mode: "shadow-evaluation",
 			executed: false,

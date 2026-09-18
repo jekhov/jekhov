@@ -2,6 +2,15 @@
 
 All notable changes to Jekhov are documented here.
 
+## 0.1.1 - 2026-09-18
+
+Documentation-only patch release.
+
+### Fixed
+
+- Replaced broken links to Jev, the official Codex non-interactive documentation, and related work.
+- Clarified that Jekhov is an npm library and CLI for Playwright workflows.
+
 ## 0.1.0 - 2026-09-18
 
 Initial public release.

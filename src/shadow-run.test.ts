@@ -85,7 +85,7 @@ describe("runShadowSelection", () => {
 		expect(result.value.proposal?.ref).toBe("e2");
 		expect(result.value).toMatchObject({
 			version: 1,
-			jekhovVersion: "0.1.0",
+			jekhovVersion: "0.1.1",
 			generatedAt: "2026-09-18T12:00:00.000Z",
 			planSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
 			sourcePolicySha256: expect.stringMatching(/^[a-f0-9]{64}$/),

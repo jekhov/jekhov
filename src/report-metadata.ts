@@ -4,7 +4,7 @@ import { minimizeUrl } from "./selection.js";
 import type { SyntheticTaskPlan } from "./synthetic-task.js";
 import type { ShadowPlan, SourcePolicy } from "./types.js";
 
-export const JEKHOV_VERSION = "0.1.0";
+export const JEKHOV_VERSION = "0.1.1";
 
 export interface ReportMetadata {
 	jekhovVersion: string;

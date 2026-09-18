@@ -114,7 +114,7 @@ Invariant: `executed` is always `false`.
 A future mode that would perform a proposed browser action only after calibrated and deterministic
 gates pass.
 
-Not: current functionality. No action mode exists in version `0.1.0`.
+Not: current functionality. No action mode exists in version `0.1.1`.
 
 ## Synthetic task harness
 
