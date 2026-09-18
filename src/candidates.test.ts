@@ -161,4 +161,23 @@ describe("collectActionCandidates", () => {
 			),
 		).toEqual({ ok: true, value: { candidates: [], omittedCount: 0 } });
 	});
+
+	it("handles deeply nested snapshots without exhausting the JavaScript call stack", () => {
+		let nested: Record<string, unknown> = {
+			role: "button",
+			name: "Deep target",
+			ref: "e1",
+		};
+		for (let index = 0; index < 20_000; index += 1) {
+			nested = { role: "group", name: `Layer ${index}`, children: [nested] };
+		}
+
+		expect(collectActionCandidates([nested], { action: "click" })).toMatchObject({
+			ok: true,
+			value: {
+				candidates: [{ name: "Deep target", context: ["Layer 1", "Layer 0"] }],
+				omittedCount: 0,
+			},
+		});
+	});
 });

@@ -101,11 +101,22 @@ describe("runSyntheticTask", () => {
 		]);
 		const jev = choiceEvaluator(["c0", "c0"]);
 
-		const result = await runSyntheticTask(plan, { page, jev });
+		const result = await runSyntheticTask(
+			plan,
+			{ page, jev },
+			{ generatedAt: () => new Date("2026-09-18T12:00:00.000Z") },
+		);
 
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error("task should complete");
 		expect(result.value.status).toBe("completed");
+		expect(result.value).toMatchObject({
+			version: 1,
+			jekhovVersion: "0.1.0",
+			generatedAt: "2026-09-18T12:00:00.000Z",
+			planSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+			sourcePolicySha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+		});
 		expect(result.value.executedStepCount).toBe(2);
 		expect(result.value.jevRequestCount).toBe(2);
 		expect(page.act).toHaveBeenNthCalledWith(1, {
@@ -171,6 +182,43 @@ describe("runSyntheticTask", () => {
 		expect(result.value.stop?.code).toBe("selector-request-budget-exhausted");
 		expect(primary.evaluate).not.toHaveBeenCalled();
 		expect(fallback.evaluate).not.toHaveBeenCalled();
+	});
+
+	it("charges the declared evaluator bound even when its response underreports calls", async () => {
+		const boundedPlan = {
+			...plan,
+			budget: { ...plan.budget, maxJevRequests: 3 },
+		};
+		const page = successfulPage([snapshots.query, snapshots.query, snapshots.submit]);
+		let providerCalls = 0;
+		const evaluator: JevEvaluator = {
+			maximumRequestCount: 2,
+			async evaluate(request) {
+				providerCalls += 2;
+				return {
+					ok: true,
+					value: {
+						request_count: 1,
+						provenance: { provider: "fixture" },
+						answers: {
+							next_element: {
+								choice: request.state.candidates[0]?.id ?? "none",
+							},
+							unambiguous_match: { noul: 1 },
+						},
+					},
+				};
+			},
+		};
+
+		const result = await runSyntheticTask(boundedPlan, { page, jev: evaluator });
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("task should return a bounded report");
+		expect(result.value.status).toBe("stopped");
+		expect(result.value.jevRequestCount).toBe(2);
+		expect(result.value.stop?.code).toBe("selector-request-budget-exhausted");
+		expect(providerCalls).toBe(2);
 	});
 
 	it("stops before acting when Jev does not select the labeled target", async () => {

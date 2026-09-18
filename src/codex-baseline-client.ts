@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // pattern: Imperative Shell
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -20,6 +19,25 @@ import type { Failure, Result } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_BUFFER_BYTES = 4 * 1024 * 1024;
+const DISABLED_CODEX_FEATURES = [
+	"apps",
+	"browser_use",
+	"browser_use_external",
+	"code_mode",
+	"computer_use",
+	"enable_mcp_apps",
+	"image_generation",
+	"in_app_browser",
+	"js_repl",
+	"multi_agent",
+	"plugins",
+	"remote_plugin",
+	"shell_tool",
+	"skill_search",
+	"standalone_web_search",
+	"unified_exec",
+	"view_image",
+] as const;
 
 interface ClientOptions {
 	dataClass: "public" | "synthetic";
@@ -65,9 +83,23 @@ function runCodex(options: {
 	prompt: string;
 	timeoutMs: number;
 }): Promise<Result<string>> {
-	const environment: NodeJS.ProcessEnv = { ...process.env };
-	delete environment.OPENAI_API_KEY;
-	delete environment.CODEX_API_KEY;
+	const environment: NodeJS.ProcessEnv = {
+		HOME: options.directory,
+		CODEX_HOME: process.env.CODEX_HOME ?? join(homedir(), ".codex"),
+	};
+	for (const key of [
+		"ALL_PROXY",
+		"HTTP_PROXY",
+		"HTTPS_PROXY",
+		"LANG",
+		"LC_ALL",
+		"NO_PROXY",
+		"PATH",
+		"SSL_CERT_DIR",
+		"SSL_CERT_FILE",
+	] as const) {
+		if (process.env[key]) environment[key] = process.env[key];
+	}
 	return new Promise((resolveResult) => {
 		const child = execFile(
 			options.codexPath,
@@ -76,6 +108,7 @@ function runCodex(options: {
 				"--ephemeral",
 				"--ignore-user-config",
 				"--ignore-rules",
+				"--strict-config",
 				"--skip-git-repo-check",
 				"--sandbox",
 				"read-only",
@@ -83,6 +116,9 @@ function runCodex(options: {
 				CODEX_BASELINE_MODEL,
 				"--config",
 				`model_reasoning_effort="${CODEX_BASELINE_REASONING_EFFORT}"`,
+				"--config",
+				'web_search="disabled"',
+				...DISABLED_CODEX_FEATURES.flatMap((feature) => ["--disable", feature]),
 				"--color",
 				"never",
 				"--json",
@@ -192,8 +228,6 @@ export async function runCodexBaselineClient(
 				requested_model: CODEX_BASELINE_MODEL,
 				reasoning_effort: CODEX_BASELINE_REASONING_EFFORT,
 				data_class: parsedArgs.value.dataClass,
-				request_sha256: createHash("sha256").update(rawRequest).digest("hex"),
-				thread_id: events.value.threadId,
 				tool_calls: 0,
 			},
 			usage: events.value.usage,

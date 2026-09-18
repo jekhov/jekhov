@@ -10,6 +10,7 @@ const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
 	vi.restoreAllMocks();
+	vi.unstubAllEnvs();
 	await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
@@ -38,9 +39,15 @@ async function fixtureFiles(): Promise<{
 import { readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
 const value = (flag) => args[args.indexOf(flag) + 1];
-const required = ["exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--json", "--sandbox", "read-only", "--model", "gpt-5.6-luna"];
+const required = ["exec", "--ephemeral", "--ignore-user-config", "--ignore-rules", "--strict-config", "--json", "--sandbox", "read-only", "--model", "gpt-5.6-luna"];
 if (!required.every((item) => args.includes(item))) process.exit(12);
 if (!args.includes('model_reasoning_effort="low"')) process.exit(13);
+for (const feature of ["shell_tool", "unified_exec", "code_mode", "view_image"]) {
+  const index = args.findIndex((item, position) => item === "--disable" && args[position + 1] === feature);
+  if (index === -1) process.exit(15);
+}
+if (!args.includes('web_search="disabled"')) process.exit(17);
+if (process.env.JEKHOV_SENTINEL) process.exit(16);
 await new Promise((resolve) => {
   process.stdin.resume();
   process.stdin.on("end", resolve);
@@ -60,6 +67,7 @@ process.stdout.write(JSON.stringify({ type: "turn.completed", usage: { input_tok
 describe("runCodexBaselineClient", () => {
 	it("runs pinned structured Codex selection and writes a Jekhov response", async () => {
 		const fixture = await fixtureFiles();
+		vi.stubEnv("JEKHOV_SENTINEL", "must-not-be-inherited");
 		const code = await runCodexBaselineClient(
 			["--data-class", "synthetic", "--input", fixture.inputPath, "--output", fixture.outputPath],
 			{ codexPath: fixture.codexPath, timeoutMs: 1_000 },
@@ -72,7 +80,6 @@ describe("runCodexBaselineClient", () => {
 				transport: "codex-cli",
 				requested_model: "gpt-5.6-luna",
 				reasoning_effort: "low",
-				thread_id: "thread-test",
 				tool_calls: 0,
 			},
 			usage: { input_tokens: 90, cached_input_tokens: 60, output_tokens: 8 },

@@ -1,7 +1,13 @@
 // pattern: Imperative Shell
 import { collectActionCandidates } from "./candidates.js";
-import { validateObservedUrl } from "./policy.js";
-import { buildSelectionRequest, parseSelectionResponse } from "./selection.js";
+import { validateObservedFrames, validateObservedUrl } from "./policy.js";
+import { createReportMetadata } from "./report-metadata.js";
+import {
+	buildSelectionRequest,
+	parseSelectionResponse,
+	projectSafeFailure,
+	projectSafeProvenance,
+} from "./selection.js";
 import type {
 	SyntheticTaskAction,
 	SyntheticTaskPage,
@@ -37,6 +43,11 @@ export interface SyntheticTaskStepReport {
 }
 
 export interface SyntheticTaskReport {
+	version: 1;
+	jekhovVersion: string;
+	generatedAt: string;
+	planSha256: string;
+	sourcePolicySha256: string;
 	mode: "synthetic-task";
 	status: "completed" | "stopped";
 	goal: string;
@@ -85,26 +96,20 @@ function validateTaskUrl(value: string, plan: SyntheticTaskPlan, step: Synthetic
 			};
 }
 
-function requestCount(value: unknown, maximum: number): number {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return 1;
-	const count = (value as Record<string, unknown>).request_count;
-	return Number.isSafeInteger(count) && (count as number) >= 1 && (count as number) <= maximum
-		? (count as number)
-		: 1;
-}
-
 export async function runSyntheticTask(
 	input: unknown,
 	ports: { page: SyntheticTaskPage; jev: JevEvaluator },
+	options: { generatedAt?: () => Date } = {},
 ): Promise<Result<SyntheticTaskReport>> {
 	const parsed = parseSyntheticTaskPlan(input);
 	if (!parsed.ok) return parsed;
-	return runValidatedSyntheticTask(parsed.value, ports);
+	return runValidatedSyntheticTask(parsed.value, ports, options);
 }
 
 export async function runValidatedSyntheticTask(
 	plan: SyntheticTaskPlan,
 	ports: { page: SyntheticTaskPage; jev: JevEvaluator },
+	options: { generatedAt?: () => Date } = {},
 ): Promise<Result<SyntheticTaskReport>> {
 	const reports: SyntheticTaskStepReport[] = [];
 	let executedStepCount = 0;
@@ -128,6 +133,8 @@ export async function runValidatedSyntheticTask(
 	const finish = (failure: Failure | null): Result<SyntheticTaskReport> => ({
 		ok: true,
 		value: {
+			version: 1,
+			...createReportMetadata(plan, plan.sourcePolicy, options.generatedAt),
 			mode: "synthetic-task",
 			status: failure ? "stopped" : "completed",
 			goal: plan.goal,
@@ -175,10 +182,15 @@ export async function runValidatedSyntheticTask(
 			return finish(failure);
 		};
 
-		const observed = await ports.page.observe();
+		const observed = await ports.page.observe(plan.budget.actionTimeoutMs);
 		if (!observed.ok) return stop(observed.error);
 		const allowed = validateTaskUrl(observed.value.url, plan, step);
 		if (!allowed.ok) return stop(allowed.error);
+		const allowedFrames = validateObservedFrames(
+			observed.value.frameUrls ?? [observed.value.url],
+			shadowPlan(plan, step),
+		);
+		if (!allowedFrames.ok) return stop(allowedFrames.error);
 		const collected = collectActionCandidates(observed.value.snapshot, { action: step.action });
 		if (!collected.ok) return stop(collected.error);
 		candidateCount = collected.value.candidates.length;
@@ -217,10 +229,14 @@ export async function runValidatedSyntheticTask(
 			});
 		}
 		const evaluated = await ports.jev.evaluate(request, taskDataClass(plan));
-		jevRequestCount += evaluated.ok
-			? requestCount(evaluated.value, maximumRequestCount)
-			: maximumRequestCount;
-		if (!evaluated.ok) return stop(evaluated.error);
+		jevRequestCount += maximumRequestCount;
+		if (!evaluated.ok) {
+			provenance = evaluated.error.telemetry
+				? projectSafeProvenance(evaluated.error.telemetry.provenance)
+				: null;
+			usage = evaluated.error.telemetry?.usage ?? null;
+			return stop(projectSafeFailure(evaluated.error));
+		}
 		const selected = parseSelectionResponse(evaluated.value, collected.value.candidates);
 		if (!selected.ok) return stop(selected.error);
 		proposal = selected.value.candidate;
@@ -240,10 +256,15 @@ export async function runValidatedSyntheticTask(
 			});
 		}
 
-		const fresh = await ports.page.observe();
+		const fresh = await ports.page.observe(plan.budget.actionTimeoutMs);
 		if (!fresh.ok) return stop(fresh.error);
 		const freshAllowed = validateTaskUrl(fresh.value.url, plan, step);
 		if (!freshAllowed.ok) return stop(freshAllowed.error);
+		const freshFrames = validateObservedFrames(
+			fresh.value.frameUrls ?? [fresh.value.url],
+			shadowPlan(plan, step),
+		);
+		if (!freshFrames.ok) return stop(freshFrames.error);
 		const freshCandidates = collectActionCandidates(fresh.value.snapshot, { action: step.action });
 		if (!freshCandidates.ok) return stop(freshCandidates.error);
 		if (freshCandidates.value.omittedCount > 0) {
@@ -285,7 +306,7 @@ export async function runValidatedSyntheticTask(
 		const actionUrl = validateTaskUrl(ports.page.currentUrl(), plan, step);
 		if (!actionUrl.ok) return stop(actionUrl.error);
 		for (const postcondition of step.postconditions) {
-			const verified = await ports.page.verify(postcondition);
+			const verified = await ports.page.verify(postcondition, plan.budget.actionTimeoutMs);
 			if (!verified.ok) return stop(verified.error);
 		}
 		reports.push({

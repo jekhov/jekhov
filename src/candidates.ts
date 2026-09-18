@@ -110,15 +110,19 @@ export function collectActionCandidates(
 	const seenRefs = new Set<string>();
 	let matchingCount = 0;
 
-	const visit = (value: unknown, context: string[]): void => {
-		if (typeof value === "string") return;
-		if (!isRecord(value)) return;
-
+	const pending: Array<{ value: unknown; context: string[] }> = [];
+	for (let index = snapshot.length - 1; index >= 0; index -= 1) {
+		pending.push({ value: snapshot[index], context: [] });
+	}
+	while (pending.length > 0) {
+		const entry = pending.pop();
+		if (!entry || typeof entry.value === "string" || !isRecord(entry.value)) continue;
+		const value = entry.value;
 		if (isCandidate(value, options.action)) {
 			const ref = cleanText(value.ref);
 			if (ref && !seenRefs.has(ref)) {
 				seenRefs.add(ref);
-				const candidate = toCandidate(value, context.slice(-2), `c${matchingCount}`);
+				const candidate = toCandidate(value, entry.context, `c${matchingCount}`);
 				matchingCount += 1;
 				if (candidate && found.length < limit) found.push({ ...candidate, id: `c${found.length}` });
 			}
@@ -126,13 +130,14 @@ export function collectActionCandidates(
 
 		const role = cleanText(value.role);
 		const name = cleanText(value.name);
-		const childContext = role && name && CONTEXT_ROLES.has(role) ? [...context, name] : context;
+		const childContext =
+			role && name && CONTEXT_ROLES.has(role) ? [...entry.context.slice(-1), name] : entry.context;
 		if (Array.isArray(value.children)) {
-			for (const child of value.children) visit(child, childContext);
+			for (let index = value.children.length - 1; index >= 0; index -= 1) {
+				pending.push({ value: value.children[index], context: childContext });
+			}
 		}
-	};
-
-	for (const node of snapshot) visit(node, []);
+	}
 	return {
 		ok: true,
 		value: { candidates: found, omittedCount: Math.max(0, matchingCount - found.length) },

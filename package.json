@@ -30,7 +30,7 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json && node scripts/set-cli-mode.mjs",
+		"build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node scripts/set-cli-mode.mjs",
 		"dev": "vitest",
 		"fix": "biome check --write .",
 		"format:check": "biome format .",
@@ -61,8 +61,7 @@
 	},
 	"homepage": "https://github.com/jekhov/jekhov#readme",
 	"publishConfig": {
-		"access": "public",
-		"provenance": true
+		"access": "public"
 	},
 	"license": "MIT",
 	"dependencies": {

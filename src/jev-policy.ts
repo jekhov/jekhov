@@ -1,5 +1,6 @@
 // pattern: Functional Core
 import type { EntryType, Questions, SystemOneRequest } from "@typesafe-ai/sdk";
+import { parseSelectionRequest } from "./selection.js";
 import type { Result } from "./types.js";
 
 export const JEV_MODEL = "jev-1.13.0";
@@ -28,43 +29,12 @@ export function validateJevPolicyRequest(
 	if (Object.hasOwn(input, "model")) {
 		return denied(`request must not set model; the wrapper pins ${JEV_MODEL}`);
 	}
-	if (!isRecord(input.state)) return denied("request.state must be a JSON object");
-	if (!isRecord(input.questions)) {
-		return denied("request must contain next_element and optional unambiguous_match questions");
-	}
-	const questionNames = Object.keys(input.questions);
-	const nextElement = input.questions.next_element;
-	const unambiguousMatch = input.questions.unambiguous_match;
-	if (
-		(questionNames.length !== 1 && questionNames.length !== 2) ||
-		!questionNames.every((name) => name === "next_element" || name === "unambiguous_match") ||
-		!isRecord(nextElement) ||
-		(unambiguousMatch !== undefined && !isRecord(unambiguousMatch))
-	) {
-		return denied("request must contain next_element and optional unambiguous_match questions");
-	}
-	if (
-		nextElement.type !== "choice" ||
-		typeof nextElement.instructions !== "string" ||
-		!nextElement.instructions.trim() ||
-		!isRecord(nextElement.criteria) ||
-		Object.keys(nextElement.criteria).length < 2 ||
-		!Object.values(nextElement.criteria).every((value) => typeof value === "string")
-	) {
-		return denied("next_element must be a choice question with at least two criteria");
-	}
-	if (
-		unambiguousMatch !== undefined &&
-		(unambiguousMatch.type !== "noul" ||
-			typeof unambiguousMatch.instructions !== "string" ||
-			!unambiguousMatch.instructions.trim())
-	) {
-		return denied("unambiguous_match must be a noul question");
-	}
+	const parsedSelection = parseSelectionRequest(input);
+	if (!parsedSelection.ok) return denied(parsedSelection.error.message);
 
 	const request = {
-		state: input.state as EntryType,
-		questions: input.questions as unknown as Questions,
+		state: parsedSelection.value.state as unknown as EntryType,
+		questions: parsedSelection.value.questions as unknown as Questions,
 		model: JEV_MODEL,
 	};
 	const serialized = JSON.stringify(request);
@@ -90,6 +60,11 @@ function sameKeys(left: string[], right: string[]): boolean {
 	);
 }
 
+function sumsToOne(values: unknown[]): boolean {
+	const total = values.reduce<number>((sum, value) => sum + (value as number), 0);
+	return Math.abs(total - 1) <= 1e-6;
+}
+
 export function validateJevPolicyResponse(
 	input: unknown,
 	questions: Questions,
@@ -110,6 +85,13 @@ export function validateJevPolicyResponse(
 	) {
 		return invalidResponse("response next_element.choice is not one of the request criteria");
 	}
+	const requestedAmbiguity = Object.hasOwn(questions, "unambiguous_match");
+	const expectedAnswerKeys = requestedAmbiguity
+		? ["next_element", "unambiguous_match"]
+		: ["next_element"];
+	if (!sameKeys(Object.keys(answers), expectedAnswerKeys)) {
+		return invalidResponse("response answers do not exactly match the requested questions");
+	}
 	if (
 		nextElement.type !== "choice" ||
 		!probability(nextElement.confidence) ||
@@ -119,8 +101,10 @@ export function validateJevPolicyResponse(
 	) {
 		return invalidResponse("response next_element telemetry is invalid");
 	}
+	if (!sumsToOne(Object.values(nextElement.probabilities))) {
+		return invalidResponse("response next_element probabilities must sum to 1");
+	}
 	const unambiguousMatch = answers.unambiguous_match;
-	const requestedAmbiguity = Object.hasOwn(questions, "unambiguous_match");
 	if (requestedAmbiguity && (!isRecord(unambiguousMatch) || !probability(unambiguousMatch.noul))) {
 		return invalidResponse("response unambiguous_match.noul must be between 0 and 1");
 	}

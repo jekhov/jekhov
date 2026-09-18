@@ -31,6 +31,14 @@ describe("Codex baseline request", () => {
 		expect(parseCodexBaselineRequest(request)).toEqual({ ok: true, value: request });
 	});
 
+	it("accepts a titleless page that is valid in the shared selection contract", () => {
+		const titleless = {
+			...request,
+			state: { ...request.state, page: { ...request.state.page, title: "" } },
+		};
+		expect(parseCodexBaselineRequest(titleless)).toEqual({ ok: true, value: titleless });
+	});
+
 	it("builds a closed output schema and keeps untrusted text in the data block", () => {
 		expect(buildCodexBaselineOutputSchema(request)).toEqual({
 			type: "object",

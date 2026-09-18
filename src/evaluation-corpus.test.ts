@@ -107,6 +107,7 @@ describe("parseEvaluationCorpus", () => {
 						sourcePolicy: {
 							allowedHosts: ["allowed.example"],
 							basis: "terms-reviewed",
+							providerDisclosure: "allowed",
 							reviewedAt: "2026-09-17",
 							note: "Public fixture retained under reviewed source terms.",
 						},

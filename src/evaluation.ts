@@ -22,6 +22,7 @@ export interface EvaluationCaseResult {
 	outcome: EvaluationOutcome;
 	status: EvaluationCaseStatus;
 	requestMade: boolean;
+	requestCount?: number;
 	requestBytes: number;
 	elapsedMilliseconds: number;
 	choiceConfidence: number | null;
@@ -89,6 +90,16 @@ function reportedCost(usage: unknown): number | null {
 	return finiteNumber(usage.cost_usd) ? usage.cost_usd : null;
 }
 
+function reportedModel(provenance: unknown): string | null {
+	if (!isRecord(provenance)) return null;
+	for (const key of ["returned_model", "requested_model", "model"] as const) {
+		if (typeof provenance[key] === "string" && provenance[key].trim()) {
+			return provenance[key];
+		}
+	}
+	return null;
+}
+
 export function classifyEvaluationOutcome(
 	expectedRef: string | null,
 	actualRef: string | null,
@@ -130,7 +141,8 @@ export function summarizeEvaluationCases(
 		}
 		if (result.status === "abstained") explicitAbstentions += 1;
 		if (result.status === "no-candidates") noCandidateCases += 1;
-		if (result.requestMade) requestsMade += 1;
+		const requestCount = result.requestCount ?? (result.requestMade ? 1 : 0);
+		requestsMade += requestCount;
 		totalRequestBytes += result.requestBytes;
 		totalElapsedMilliseconds += result.elapsedMilliseconds;
 
@@ -152,11 +164,11 @@ export function summarizeEvaluationCases(
 					coldElapsedMilliseconds += result.elapsedMilliseconds;
 				}
 			} else cacheUnreportedRequests += 1;
-			if (pricing) {
+			if (pricing && reportedModel(result.provenance) === pricing.model) {
 				const estimated = estimateUsageCost(result.usage, pricing);
 				if (estimated.ok) {
 					apiListPriceTotal += estimated.value.totalUsd;
-					pricedRequests += 1;
+					pricedRequests += requestCount;
 				}
 			}
 		}

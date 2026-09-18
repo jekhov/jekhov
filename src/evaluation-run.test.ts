@@ -94,6 +94,7 @@ describe("runEvaluationCorpus", () => {
 			],
 			{
 				now: () => (time += 5),
+				generatedAt: () => new Date("2026-09-18T12:00:00.000Z"),
 				cascade: { primarySelector: "jev", fallbackSelector: "baseline", thresholds: [0.5] },
 			},
 		);
@@ -103,6 +104,8 @@ describe("runEvaluationCorpus", () => {
 		expect(calls).toEqual(["Continue", "Save", "Continue", "Save"]);
 		expect(result.value).toMatchObject({
 			version: 2,
+			jekhovVersion: "0.1.0",
+			generatedAt: "2026-09-18T12:00:00.000Z",
 			mode: "shadow-evaluation",
 			executed: false,
 			corpus: { name: "two-cases", caseCount: 2 },
@@ -185,7 +188,7 @@ describe("runEvaluationCorpus", () => {
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error("evaluation should succeed");
 		expect(requests).toHaveLength(2);
-		expect(requests.every((request) => request.state.candidates.length === 0)).toBe(true);
+		expect(requests.every((request) => request.state.candidates.length > 0)).toBe(true);
 		expect(requests.every((request) => !("unambiguous_match" in request.questions))).toBe(true);
 		expect(result.value.selectors[0]?.summary.correct).toBe(2);
 		expect(result.value.selectors[0]?.cases[0]).toMatchObject({
@@ -218,7 +221,18 @@ describe("runEvaluationCorpus", () => {
 			evaluate: vi.fn(async () => {
 				call += 1;
 				return call === 1
-					? { ok: false as const, error: { code: "client-failed", message: "offline" } }
+					? {
+							ok: false as const,
+							error: {
+								code: "client-failed",
+								message: "offline",
+								telemetry: {
+									requestCount: 1,
+									provenance: { provider: "fixture", requested_model: "fixture" },
+									usage: { input_tokens: 3 },
+								},
+							},
+						}
 					: {
 							ok: true as const,
 							value: {
@@ -241,9 +255,35 @@ describe("runEvaluationCorpus", () => {
 			outcome: "error",
 			requestMade: true,
 			failure: { code: "client-failed", message: "offline" },
+			requestCount: 1,
+			provenance: { provider: "fixture" },
+			usage: { input_tokens: 3 },
 		});
 		expect(result.value.selectors[0]?.summary.errors).toBe(1);
 		expect(failing.evaluate).toHaveBeenCalledTimes(2);
+	});
+
+	it("uses a selector's declared request bound in budgets and per-case accounting", async () => {
+		const bounded = evaluator({ Continue: "c0", Save: "none" }, [], []);
+		bounded.maximumRequestCount = 2;
+		const originalEvaluate = bounded.evaluate.bind(bounded);
+		bounded.evaluate = async (request, dataClass) => {
+			const result = await originalEvaluate(request, dataClass);
+			return result.ok
+				? {
+						...result,
+						value: { ...(result.value as Record<string, unknown>), request_count: 2 },
+					}
+				: result;
+		};
+
+		const result = await runEvaluationCorpus(corpus, [{ name: "cascade", evaluator: bounded }]);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("bounded evaluation should succeed");
+		expect(result.value.requestBudget.maximumRequests).toBe(4);
+		expect(result.value.selectors[0]?.summary.requestsMade).toBe(4);
+		expect(result.value.selectors[0]?.cases.map((item) => item.requestCount)).toEqual([2, 2]);
 	});
 
 	it("rejects missing or duplicate selector names before making requests", async () => {

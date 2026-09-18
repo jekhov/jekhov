@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pattern: Imperative Shell
 import { realpathSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs } from "./cli-args.js";
@@ -87,8 +87,11 @@ async function readJson(
 
 async function emit(value: unknown, outputPath?: string): Promise<void> {
 	const text = `${JSON.stringify(value, null, 2)}\n`;
-	if (outputPath) await writeFile(resolve(outputPath), text, { mode: 0o600 });
-	else process.stdout.write(text);
+	if (outputPath) {
+		const absolute = resolve(outputPath);
+		await writeFile(absolute, text, { mode: 0o600 });
+		await chmod(absolute, 0o600);
+	} else process.stdout.write(text);
 }
 
 function reportFailure(failure: Failure): number {

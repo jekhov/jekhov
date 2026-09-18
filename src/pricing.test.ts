@@ -50,11 +50,22 @@ describe("parseEvaluationPricing", () => {
 		[{ ...pricingInput, version: 2 }, "pricing.version must be 1"],
 		[{ ...pricingInput, currency: "EUR" }, "pricing.currency must be USD"],
 		[{ ...pricingInput, asOf: "today" }, "pricing.asOf must be an ISO date"],
+		[{ ...pricingInput, asOf: "2026-99-99" }, "pricing.asOf must be a real calendar date"],
 		[{ ...pricingInput, selectors: null }, "pricing.selectors must be an object"],
 		[{ ...pricingInput, selectors: {} }, "pricing.selectors must contain 1-8 selectors"],
 		[
 			{ ...pricingInput, selectors: { " ": pricingInput.selectors.jev } },
 			"pricing selector names must be nonempty",
+		],
+		[
+			{
+				...pricingInput,
+				selectors: {
+					jev: pricingInput.selectors.jev,
+					" jev ": pricingInput.selectors.baseline,
+				},
+			},
+			"pricing selector names must be unique after trimming: jev",
 		],
 		[{ ...pricingInput, selectors: { jev: null } }, "selector jev pricing must be an object"],
 		[
@@ -220,7 +231,20 @@ describe("estimateUsageCost", () => {
 		});
 		expect(estimateUsageCost({}, rates)).toMatchObject({
 			ok: false,
-			error: { code: "unpriced-usage", message: "usage contains no configured pricing fields" },
+			error: { code: "unpriced-usage", message: "usage field input_tokens is missing" },
+		});
+		expect(
+			estimateUsageCost(
+				{
+					input_tokens: 10,
+					cached_input_tokens: 0,
+					cache_write_input_tokens: 0,
+				},
+				rates,
+			),
+		).toMatchObject({
+			ok: false,
+			error: { code: "unpriced-usage", message: "usage field output_tokens is missing" },
 		});
 		expect(estimateUsageCost({ input_tokens: -1 }, rates)).toMatchObject({
 			ok: false,

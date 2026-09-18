@@ -105,7 +105,7 @@ describe("createThresholdCascadeEvaluator", () => {
 		});
 		const cascade = createThresholdCascadeEvaluator({ primary, fallback, thresholds });
 
-		await expect(cascade.evaluate(request, "synthetic")).resolves.toEqual({
+		await expect(cascade.evaluate(request, "synthetic")).resolves.toMatchObject({
 			ok: false,
 			error: {
 				code: "invalid-fallback-response",
@@ -129,5 +129,112 @@ describe("createThresholdCascadeEvaluator", () => {
 		});
 		expect(primary.evaluate).not.toHaveBeenCalled();
 		expect(fallback.evaluate).not.toHaveBeenCalled();
+	});
+
+	it("accepts compatible choice-only selectors", async () => {
+		const choiceOnlyRequest: SelectionRequest = {
+			...request,
+			state: { ...request.state, candidates: [] },
+			questions: { next_element: request.questions.next_element },
+		};
+		const choiceOnlyResponse = {
+			provenance: { provider: "fixture" },
+			usage: { input_tokens: 1 },
+			answers: {
+				next_element: {
+					type: "choice",
+					choice: "c0",
+					confidence: 0.9,
+					probabilities: { c0: 0.9, none: 0.1 },
+				},
+			},
+		};
+		const primary = evaluator({ ok: true, value: choiceOnlyResponse });
+		const fallback = evaluator({ ok: true, value: choiceOnlyResponse });
+		const cascade = createThresholdCascadeEvaluator({ primary, fallback, thresholds });
+
+		await expect(cascade.evaluate(choiceOnlyRequest, "synthetic")).resolves.toMatchObject({
+			ok: true,
+			value: { request_count: 1, provenance: { route: "primary" } },
+		});
+		expect(fallback.evaluate).not.toHaveBeenCalled();
+	});
+
+	it("retains primary telemetry when a fallback call fails", async () => {
+		const primary = evaluator({ ok: true, value: response("c0", 0.1, "primary", 10) });
+		const fallback = evaluator({
+			ok: false,
+			error: {
+				code: "fallback-failed",
+				message: "offline",
+				telemetry: {
+					requestCount: 1,
+					provenance: { provider: "fallback", request_sha256: "private" },
+					usage: { input_tokens: 20, output_tokens: 1 },
+				},
+			},
+		});
+		const cascade = createThresholdCascadeEvaluator({ primary, fallback, thresholds });
+
+		await expect(cascade.evaluate(request, "synthetic")).resolves.toMatchObject({
+			ok: false,
+			error: {
+				code: "fallback-failed",
+				telemetry: {
+					requestCount: 2,
+					usage: { input_tokens: 30, output_tokens: 3 },
+					provenance: {
+						provider: "jekhov-cascade",
+						route: "fallback",
+						fallback: {
+							provider: "fallback",
+							failure: { code: "fallback-failed" },
+						},
+					},
+				},
+			},
+		});
+	});
+
+	it("retains failed-primary telemetry when the fallback also fails", async () => {
+		const primary = evaluator({
+			ok: false,
+			error: {
+				code: "primary-failed",
+				message: "offline",
+				telemetry: {
+					requestCount: 1,
+					provenance: { provider: "primary" },
+					usage: { input_tokens: 7 },
+				},
+			},
+		});
+		const fallback = evaluator({
+			ok: false,
+			error: {
+				code: "fallback-failed",
+				message: "offline",
+				telemetry: {
+					requestCount: 1,
+					provenance: { provider: "fallback" },
+					usage: { input_tokens: 11 },
+				},
+			},
+		});
+		const cascade = createThresholdCascadeEvaluator({ primary, fallback, thresholds });
+
+		await expect(cascade.evaluate(request, "synthetic")).resolves.toMatchObject({
+			ok: false,
+			error: {
+				telemetry: {
+					requestCount: 2,
+					usage: { input_tokens: 18 },
+					provenance: {
+						primary: { provider: "primary", failure: { code: "primary-failed" } },
+						fallback: { provider: "fallback", failure: { code: "fallback-failed" } },
+					},
+				},
+			},
+		});
 	});
 });

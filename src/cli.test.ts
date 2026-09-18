@@ -1,6 +1,6 @@
 // pattern: Imperative Shell
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
@@ -39,17 +39,17 @@ describe("runCli evaluate", () => {
 				asOf: "2026-09-18",
 				selectors: {
 					jev: {
-						model: "fixture-jev",
+						model: "fixture",
 						sourceUrl: "https://example.com/jev-pricing",
 						components: [{ usageField: "input_tokens", usdPerMillion: 0.042 }],
 					},
 					"jev-choice-only": {
-						model: "fixture-jev",
+						model: "fixture",
 						sourceUrl: "https://example.com/jev-pricing",
 						components: [{ usageField: "input_tokens", usdPerMillion: 0.042 }],
 					},
 					baseline: {
-						model: "fixture-baseline",
+						model: "fixture",
 						sourceUrl: "https://example.com/baseline-pricing",
 						components: [{ usageField: "input_tokens", usdPerMillion: 0.2 }],
 					},
@@ -74,7 +74,7 @@ const probabilities = Object.fromEntries(Object.keys(request.questions.next_elem
 const answers = { next_element: { type: "choice", choice, confidence: 0.9, probabilities } };
 if (request.questions.unambiguous_match) answers.unambiguous_match = { type: "noul", noul: choice === "none" ? 0.2 : 0.9 };
 writeFileSync(args["--output"], JSON.stringify({
-  provenance: { provider: "fixture", cache_hit: false },
+  provenance: { provider: "fixture", requested_model: "fixture", cache_hit: false },
   usage: { input_tokens: 10, cost_usd: 0.0001 },
   answers
 }));
@@ -126,6 +126,20 @@ writeFileSync(args["--output"], JSON.stringify({
 		).toBe(true);
 		expect(report.cascade?.operatingPoints).toHaveLength(21);
 		expect(report.cascade?.operatingPoints[8]?.threshold).toBe(0.4);
+
+		await chmod(outputPath, 0o644);
+		expect(
+			await runCli([
+				"evaluate",
+				"--corpus",
+				resolve("corpora/synthetic-v1.json"),
+				"--jev-client",
+				clientPath,
+				"--output",
+				outputPath,
+			]),
+		).toBe(0);
+		expect((await stat(outputPath)).mode & 0o777).toBe(0o600);
 	});
 });
 

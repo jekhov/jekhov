@@ -224,7 +224,7 @@ describe("summarizeEvaluationCases", () => {
 					matchProbabilitySource: "unambiguous-noul",
 					candidateCount: 1,
 					omittedCandidateCount: 0,
-					provenance: { cache_hit: false },
+					provenance: { cache_hit: false, requested_model: "fixture" },
 					usage: { input_tokens: 1_000, output_tokens: 100 },
 				},
 			],
@@ -243,6 +243,48 @@ describe("summarizeEvaluationCases", () => {
 			pricedRequests: 1,
 			totalRequests: 1,
 			complete: true,
+		});
+	});
+
+	it("does not apply a rate schedule to a different reported model", () => {
+		const summary = summarizeEvaluationCases(
+			[
+				{
+					caseId: "mismatch",
+					action: "click",
+					tags: [],
+					expectedRef: "a",
+					actualRef: "a",
+					outcome: "correct-selection",
+					status: "proposed",
+					requestMade: true,
+					requestBytes: 100,
+					elapsedMilliseconds: 4,
+					choiceConfidence: 1,
+					choiceProbabilities: { a: 1, none: 0 },
+					matchProbability: 1,
+					matchProbabilitySource: "unambiguous-noul",
+					candidateCount: 1,
+					omittedCandidateCount: 0,
+					provenance: { requested_model: "different-model" },
+					usage: { input_tokens: 1_000, output_tokens: 100 },
+				},
+			],
+			{
+				model: "priced-model",
+				sourceUrl: "https://example.com/pricing",
+				components: [
+					{ usageField: "input_tokens", usdPerMillion: 0.2 },
+					{ usageField: "output_tokens", usdPerMillion: 1.2 },
+				],
+			},
+		);
+
+		expect(summary.apiListPriceUsd).toEqual({
+			total: 0,
+			pricedRequests: 0,
+			totalRequests: 1,
+			complete: false,
 		});
 	});
 });

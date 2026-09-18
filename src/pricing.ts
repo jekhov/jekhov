@@ -60,6 +60,17 @@ function roundUsd(value: number): number {
 	return Number(value.toFixed(12));
 }
 
+function isCalendarDate(value: string): boolean {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+	const [year, month, day] = value.split("-").map(Number);
+	const date = new Date(Date.UTC(year as number, (month as number) - 1, day));
+	return (
+		date.getUTCFullYear() === year &&
+		date.getUTCMonth() === (month as number) - 1 &&
+		date.getUTCDate() === day
+	);
+}
+
 function parseComponent(
 	input: unknown,
 	selectorName: string,
@@ -107,6 +118,7 @@ export function parseEvaluationPricing(input: unknown): Result<EvaluationPricing
 	if (typeof input.asOf !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.asOf)) {
 		return invalid("pricing.asOf must be an ISO date");
 	}
+	if (!isCalendarDate(input.asOf)) return invalid("pricing.asOf must be a real calendar date");
 	if (!isRecord(input.selectors)) return invalid("pricing.selectors must be an object");
 	const entries = Object.entries(input.selectors);
 	if (entries.length < 1 || entries.length > MAX_SELECTORS) {
@@ -114,9 +126,14 @@ export function parseEvaluationPricing(input: unknown): Result<EvaluationPricing
 	}
 
 	const selectors: Record<string, SelectorPricing> = {};
+	const selectorNames = new Set<string>();
 	for (const [rawName, value] of entries) {
 		const name = rawName.trim();
 		if (!name) return invalid("pricing selector names must be nonempty");
+		if (selectorNames.has(name)) {
+			return invalid(`pricing selector names must be unique after trimming: ${name}`);
+		}
+		selectorNames.add(name);
 		if (!isRecord(value)) return invalid(`selector ${name} pricing must be an object`);
 		if (!nonemptyString(value.model)) return invalid(`selector ${name} model is required`);
 		if (!nonemptyString(value.sourceUrl) || !value.sourceUrl.startsWith("https://")) {
@@ -153,7 +170,7 @@ export function parseEvaluationPricing(input: unknown): Result<EvaluationPricing
 
 function usageCount(usage: Record<string, unknown>, field: string): Result<number> {
 	const value = usage[field];
-	if (value === undefined) return { ok: true, value: 0 };
+	if (value === undefined) return unpriced(`usage field ${field} is missing`);
 	if (!finiteNonnegative(value))
 		return unpriced(`usage field ${field} must be a finite nonnegative number`);
 	return { ok: true, value };
@@ -164,11 +181,9 @@ export function estimateUsageCost(
 	pricing: SelectorPricing,
 ): Result<UsageCostEstimate> {
 	if (!isRecord(usage)) return unpriced("usage must be an object");
-	let observedConfiguredField = false;
 	let totalUsd = 0;
 	const components: UsageCostComponent[] = [];
 	for (const component of pricing.components) {
-		if (Object.hasOwn(usage, component.usageField)) observedConfiguredField = true;
 		const base = usageCount(usage, component.usageField);
 		if (!base.ok) return base;
 		let billableTokens = base.value;
@@ -189,6 +204,5 @@ export function estimateUsageCost(
 			costUsd,
 		});
 	}
-	if (!observedConfiguredField) return unpriced("usage contains no configured pricing fields");
 	return { ok: true, value: { totalUsd: roundUsd(totalUsd), components } };
 }

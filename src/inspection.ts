@@ -1,6 +1,7 @@
 // pattern: Imperative Shell
 import { collectActionCandidates } from "./candidates.js";
-import { parseShadowPlan, validateObservedUrl } from "./policy.js";
+import { parseShadowPlan, validateObservedFrames, validateObservedUrl } from "./policy.js";
+import { minimizeUrl } from "./selection.js";
 import type { ActionCandidate, BrowserObserver, Result } from "./types.js";
 
 export interface InspectionReport {
@@ -24,17 +25,23 @@ export async function runInspection(
 	if (!observed.ok) return observed;
 	const allowed = validateObservedUrl(observed.value.url, plan);
 	if (!allowed.ok) return allowed;
+	const frames = validateObservedFrames(observed.value.frameUrls ?? [observed.value.url], plan);
+	if (!frames.ok) return frames;
 	const collected = collectActionCandidates(observed.value.snapshot, { action: plan.step.action });
 	if (!collected.ok) return collected;
+	const candidates = collected.value.candidates.map((candidate) => ({
+		...candidate,
+		...(candidate.url ? { url: minimizeUrl(candidate.url) } : {}),
+	}));
 	return {
 		ok: true,
 		value: {
 			mode: "inspect",
 			executed: false,
 			stepId: plan.step.id,
-			observedUrl: observed.value.url,
+			observedUrl: minimizeUrl(observed.value.url),
 			pageTitle: observed.value.title,
-			candidates: collected.value.candidates,
+			candidates,
 			omittedCandidateCount: collected.value.omittedCount,
 		},
 	};

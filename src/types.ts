@@ -11,6 +11,11 @@ export type SourcePolicyBasis =
 export interface Failure {
 	code: string;
 	message: string;
+	telemetry?: {
+		requestCount: number;
+		provenance: Record<string, unknown>;
+		usage: unknown;
+	};
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: Failure };
@@ -18,6 +23,7 @@ export type Result<T> = { ok: true; value: T } | { ok: false; error: Failure };
 export interface SourcePolicy {
 	allowedHosts: string[];
 	basis: SourcePolicyBasis;
+	providerDisclosure?: "allowed";
 	reviewedAt: string;
 	note: string;
 }
@@ -58,6 +64,7 @@ export interface PageObservation {
 	url: string;
 	title: string;
 	snapshot: unknown;
+	frameUrls?: string[];
 }
 
 export interface BrowserObserver {
@@ -126,6 +133,11 @@ export interface ParsedSelection {
 }
 
 export interface ShadowReport {
+	version: 1;
+	jekhovVersion: string;
+	generatedAt: string;
+	planSha256: string;
+	sourcePolicySha256: string;
 	mode: "shadow";
 	selectionProfile: SelectionProfile;
 	status: "abstained" | "no-candidates" | "proposed";

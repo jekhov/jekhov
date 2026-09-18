@@ -29,11 +29,13 @@ disabled.
 
 ## Quick start
 
-Requires Node 22 or newer and a [Jev](https://typesafe.ai/) API key.
+Requires Node 22 or newer and a Jev API key created through TypeSafe's
+[official quick start](https://docs.typesafe.ai/introduction/quickstart). Keep the key server-side;
+Jekhov reads it from `TYPESAFE_API_KEY`.
 
 ```sh
 npm install jekhov
-npx playwright install chromium
+npx playwright install --with-deps chromium
 export TYPESAFE_API_KEY=your_key_here
 npx jekhov demo
 ```
@@ -56,6 +58,8 @@ node dist/cli.js inspect --plan examples/synthetic-plan.json
 
 - Plans declare `public` or `synthetic` data. Private data is unsupported.
 - Every HTTP(S) plan carries an exact hostname allowlist and a documented access basis.
+- Public plans separately declare `providerDisclosure: "allowed"` before bounded page fields can be
+  sent to a selector provider.
 - Plans are runtime-validated before browser observation, including through the exported API.
 - The observed final URL is validated before page-derived data reaches Jev.
 - Page text is treated as untrusted evidence, not instructions.
@@ -73,7 +77,13 @@ node dist/cli.js inspect --plan examples/synthetic-plan.json
 Requested-URL and final-URL checks form a data-release gate, not network confinement. A browser may
 receive a redirect response before Jekhov rejects the destination and withholds page data from Jev.
 
-## Shadow selection
+## Repository examples
+
+The remaining commands in this README use repository-relative fixtures. Run them from a clone after
+`npm install` and `npm run build`; package consumers should invoke the installed CLI as `npx jekhov`
+and provide their own plan and corpus paths.
+
+### Shadow selection
 
 The default wrapper pins the Jev model, accepts only declared public or synthetic data, validates
 requests and responses, caps request size, refuses provider redirects, records provenance, and
@@ -86,9 +96,11 @@ node dist/cli.js shadow --plan examples/synthetic-plan.json
 `--jev-client /path/to/compatible-wrapper.mjs` remains available for an audited replacement. A
 report includes request bytes, provider usage, cache status, elapsed time, the chosen candidate or
 abstention, Choice confidence and probabilities, and `executed: false`. Each shadow step makes at
-most one Jev request containing one choice question and one ambiguity-probability question.
+most one Jev request containing one choice question and one ambiguity-probability question. Durable
+reports identify the Jekhov version and generation time and include publication-safe plan-structure
+and source-policy fingerprints; raw provider thread IDs and request hashes are never emitted.
 
-## Existing Playwright pages
+### Existing Playwright pages
 
 Library users can inspect a caller-owned Playwright `Page` without opening another browser:
 
@@ -108,7 +120,7 @@ const report = await runShadowSelection(plan, {
 The page adapter reads the current page; it does not navigate or close it. The runner validates the
 plan before observation and validates `page.url()` before releasing page-derived candidates.
 
-## Complete synthetic tasks
+### Complete synthetic tasks
 
 The repository includes a four-action task covering `fill`, `select`, `check`, and `click`:
 
@@ -131,7 +143,7 @@ action.
 This command intentionally rejects public pages. It proves the complete plan/select/act/verify loop
 and supplies an execution benchmark, but it is not the calibrated public-site action mode.
 
-## MiniWoB++ benchmark
+### MiniWoB++ benchmark
 
 Jekhov includes a five-template adapter for the pinned MiniWoB++ revision used by BrowserGym. It
 covers `choose-list`, `click-button`, `click-checkboxes`, `click-test`, and `enter-text` using the
@@ -163,7 +175,7 @@ before a Jev request when the same identity is ambiguous.
 This is a bounded, preplanned MiniWoB++ slice, not the full 125-template BrowserGym benchmark and
 not autonomous planning. The checked-in corpus is public; provider run reports remain private.
 
-## Plan format
+### Plan format
 
 ```json
 {
@@ -175,6 +187,7 @@ not autonomous planning. The checked-in corpus is public; provider run reports r
   "sourcePolicy": {
     "allowedHosts": ["catalogue.example"],
     "basis": "terms-reviewed",
+    "providerDisclosure": "allowed",
     "reviewedAt": "2026-09-17",
     "note": "Public catalogue pages permit this bounded read-only evaluation."
   },
@@ -189,7 +202,7 @@ not autonomous planning. The checked-in corpus is public; provider run reports r
 Supported actions are `click`, `fill`, `select`, and `check`. They filter candidates; shadow mode
 does not execute them.
 
-## Evaluation
+### Evaluation
 
 The repository-owned smoke and calibration corpora at `corpora/synthetic-v1.json`,
 `corpora/synthetic-v2.json`, and `corpora/miniwob-v1.json` are public and ship in the npm package.
@@ -206,12 +219,12 @@ node dist/cli.js evaluate \
 ```
 
 Every evaluation compares the full Jev request with a `jev-choice-only` profile that removes the
-ambiguity question and duplicate candidate state. Omit `--baseline-client` to compare only those
-two Jev profiles. Supplying it also enables the paired offline cascade sweep using the full Jev
-profile as primary.
+ambiguity question while retaining wrapper-verifiable candidate state. Omit `--baseline-client` to
+compare only those two Jev profiles. Supplying it also enables the paired offline cascade sweep
+using the full Jev profile as primary.
 
-Evaluation replays observations without launching a browser, runs sequentially, makes at most one
-request per selector per case, and always reports `executed: false`. Reports separate explicit
+Evaluation replays observations without launching a browser, runs sequentially, reserves every
+selector's declared provider-request bound per case, and always reports `executed: false`. Reports separate explicit
 abstention from deterministic no-candidate cases and include candidate accuracy, proposal precision,
 request size, cache-separated latency, usage, and dated list-price estimates when configured.
 Per-case results retain Jev's Choice confidence, full probability distribution, and the signal used

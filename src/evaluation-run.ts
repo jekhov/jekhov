@@ -15,6 +15,8 @@ import {
 } from "./evaluation.js";
 import { type EvaluationCorpus, parseEvaluationCorpus } from "./evaluation-corpus.js";
 import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
+import { JEKHOV_VERSION } from "./report-metadata.js";
+import { projectSafeFailure, projectSafeProvenance } from "./selection.js";
 import { runShadowSelection } from "./shadow-run.js";
 import type {
 	BrowserObserver,
@@ -40,6 +42,8 @@ export interface EvaluationSelectorReport {
 
 export interface EvaluationReport {
 	version: 2;
+	jekhovVersion: string;
+	generatedAt: string;
 	mode: "shadow-evaluation";
 	executed: false;
 	corpus: { name: string; caseCount: number; sha256: string };
@@ -68,6 +72,7 @@ export async function runEvaluationCorpus(
 	selectors: EvaluationSelector[],
 	options: {
 		now?: () => number;
+		generatedAt?: () => Date;
 		pricing?: EvaluationPricing;
 		cascade?: {
 			primarySelector: string;
@@ -85,11 +90,17 @@ export async function runEvaluationCorpus(
 		return invalid(`at most ${MAX_SELECTORS} selectors are supported`);
 	}
 	const names = new Set<string>();
+	const requestBounds = new Map<string, number>();
 	for (const selector of selectors) {
 		const name = selector.name.trim();
 		if (!name) return invalid("selector names must be nonempty");
 		if (names.has(name)) return invalid(`selector names must be unique: ${name}`);
 		names.add(name);
+		const requestBound = selector.evaluator.maximumRequestCount ?? 1;
+		if (!Number.isSafeInteger(requestBound) || requestBound < 1 || requestBound > 20) {
+			return invalid(`selector ${name} request bound must be 1-20`);
+		}
+		requestBounds.set(name, requestBound);
 	}
 	if (
 		options.cascade &&
@@ -111,12 +122,32 @@ export async function runEvaluationCorpus(
 			});
 			if (!candidates.ok) return candidates;
 			let requestMade = false;
+			let requestCount = 0;
 			let requestBytes = 0;
+			const requestBound = requestBounds.get(selector.name.trim()) ?? 1;
 			const trackingEvaluator: JevEvaluator = {
-				evaluate(request: SelectionRequest, dataClass) {
+				maximumRequestCount: requestBound,
+				async evaluate(request: SelectionRequest, dataClass) {
 					requestMade = true;
 					requestBytes = Buffer.byteLength(JSON.stringify(request));
-					return selector.evaluator.evaluate(request, dataClass);
+					const evaluated = await selector.evaluator.evaluate(request, dataClass);
+					if (!evaluated.ok) {
+						requestCount = evaluated.error.telemetry?.requestCount ?? requestBound;
+						return evaluated;
+					}
+					const reported =
+						typeof evaluated.value === "object" &&
+						evaluated.value !== null &&
+						!Array.isArray(evaluated.value)
+							? (evaluated.value as Record<string, unknown>).request_count
+							: undefined;
+					requestCount =
+						Number.isSafeInteger(reported) &&
+						(reported as number) >= 1 &&
+						(reported as number) <= requestBound
+							? (reported as number)
+							: 1;
+					return evaluated;
 				},
 			};
 			const startedAt = now();
@@ -142,6 +173,7 @@ export async function runEvaluationCorpus(
 					outcome: "error",
 					status: "error",
 					requestMade,
+					requestCount,
 					requestBytes,
 					elapsedMilliseconds,
 					choiceConfidence: null,
@@ -150,9 +182,11 @@ export async function runEvaluationCorpus(
 					matchProbabilitySource: null,
 					candidateCount: candidates.value.candidates.length,
 					omittedCandidateCount: candidates.value.omittedCount,
-					provenance: null,
-					usage: null,
-					failure: result.error,
+					provenance: result.error.telemetry
+						? projectSafeProvenance(result.error.telemetry.provenance)
+						: null,
+					usage: result.error.telemetry?.usage ?? null,
+					failure: projectSafeFailure(result.error),
 				});
 				continue;
 			}
@@ -167,6 +201,7 @@ export async function runEvaluationCorpus(
 				outcome: classifyEvaluationOutcome(evaluationCase.label.expectedRef, actualRef),
 				status: result.value.status,
 				requestMade,
+				requestCount,
 				requestBytes,
 				elapsedMilliseconds,
 				choiceConfidence: result.value.choiceConfidence,
@@ -208,6 +243,8 @@ export async function runEvaluationCorpus(
 		ok: true,
 		value: {
 			version: 2,
+			jekhovVersion: JEKHOV_VERSION,
+			generatedAt: (options.generatedAt ?? (() => new Date()))().toISOString(),
 			mode: "shadow-evaluation",
 			executed: false,
 			corpus: {
@@ -218,7 +255,9 @@ export async function runEvaluationCorpus(
 			requestBudget: {
 				selectors: selectors.length,
 				casesPerSelector: validatedCorpus.cases.length,
-				maximumRequests: selectors.length * validatedCorpus.cases.length,
+				maximumRequests:
+					[...requestBounds.values()].reduce((sum, value) => sum + value, 0) *
+					validatedCorpus.cases.length,
 			},
 			pricing: pricing ?? null,
 			selectors: selectorReports,

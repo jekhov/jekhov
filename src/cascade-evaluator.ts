@@ -1,5 +1,7 @@
 // pattern: Imperative Shell
-import type { BrowserAction, JevEvaluator, Result } from "./types.js";
+
+import { projectSafeProvenance } from "./selection.js";
+import type { BrowserAction, Failure, JevEvaluator, Result } from "./types.js";
 
 type CascadeReason =
 	| "invalid-primary-response"
@@ -22,28 +24,80 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseRawSelection(
 	value: unknown,
 	allowedChoices: ReadonlySet<string>,
+	requiresAmbiguity: boolean,
 ): RawSelectionResponse | undefined {
 	if (!isRecord(value) || !isRecord(value.provenance) || !isRecord(value.answers)) return undefined;
 	const nextElement = value.answers.next_element;
 	const unambiguousMatch = value.answers.unambiguous_match;
+	const choiceConfidence =
+		nextElement && isRecord(nextElement) ? nextElement.confidence : undefined;
 	if (
 		!isRecord(nextElement) ||
 		typeof nextElement.choice !== "string" ||
 		!allowedChoices.has(nextElement.choice) ||
-		!isRecord(unambiguousMatch) ||
-		typeof unambiguousMatch.noul !== "number" ||
-		!Number.isFinite(unambiguousMatch.noul) ||
-		unambiguousMatch.noul < 0 ||
-		unambiguousMatch.noul > 1
+		(requiresAmbiguity
+			? !isRecord(unambiguousMatch) ||
+				typeof unambiguousMatch.noul !== "number" ||
+				!Number.isFinite(unambiguousMatch.noul) ||
+				unambiguousMatch.noul < 0 ||
+				unambiguousMatch.noul > 1
+			: typeof choiceConfidence !== "number" ||
+				!Number.isFinite(choiceConfidence) ||
+				choiceConfidence < 0 ||
+				choiceConfidence > 1)
 	) {
 		return undefined;
 	}
 	return {
 		answers: value.answers,
 		choice: nextElement.choice,
-		matchProbability: unambiguousMatch.noul,
+		matchProbability: requiresAmbiguity
+			? ((unambiguousMatch as Record<string, unknown>).noul as number)
+			: (choiceConfidence as number),
 		provenance: value.provenance,
 		usage: Object.hasOwn(value, "usage") ? value.usage : null,
+	};
+}
+
+function withTelemetry(
+	failure: Failure,
+	input: {
+		primaryResult: Result<unknown>;
+		primary: RawSelectionResponse | undefined;
+		reason: CascadeReason;
+		threshold: number;
+		requestCount: number;
+	},
+): Result<never> {
+	const failureProvenance = (value: Failure): Record<string, unknown> => ({
+		...projectSafeProvenance(value.telemetry?.provenance ?? {}),
+		failure: { code: value.code },
+	});
+	return {
+		ok: false,
+		error: {
+			...failure,
+			telemetry: {
+				requestCount: input.requestCount,
+				provenance: {
+					provider: "jekhov-cascade",
+					route: "fallback",
+					reason: input.reason,
+					threshold: input.threshold,
+					primary:
+						input.primary?.provenance ??
+						(input.primaryResult.ok
+							? { invalid_response: true }
+							: failureProvenance(input.primaryResult.error)),
+					fallback: failureProvenance(failure),
+				},
+				usage: numericUsage(
+					input.primary?.usage,
+					input.primaryResult.ok ? null : input.primaryResult.error.telemetry?.usage,
+					failure.telemetry?.usage,
+				),
+			},
+		},
 	};
 }
 
@@ -88,13 +142,11 @@ export function createThresholdCascadeEvaluator(options: {
 				};
 			}
 			const threshold = options.thresholds[request.state.intended_action];
-			const allowedChoices = new Set([
-				...request.state.candidates.map((candidate) => candidate.id),
-				"none",
-			]);
+			const allowedChoices = new Set(Object.keys(request.questions.next_element.criteria));
+			const requiresAmbiguity = Object.hasOwn(request.questions, "unambiguous_match");
 			const primaryResult = await options.primary.evaluate(request, dataClass);
 			const primary = primaryResult.ok
-				? parseRawSelection(primaryResult.value, allowedChoices)
+				? parseRawSelection(primaryResult.value, allowedChoices, requiresAmbiguity)
 				: undefined;
 			let reason: CascadeReason | null = null;
 			if (!primaryResult.ok) reason = "primary-error";
@@ -120,16 +172,30 @@ export function createThresholdCascadeEvaluator(options: {
 			}
 
 			const fallbackResult = await options.fallback.evaluate(request, dataClass);
-			if (!fallbackResult.ok) return fallbackResult;
-			const fallback = parseRawSelection(fallbackResult.value, allowedChoices);
+			if (!fallbackResult.ok) {
+				return withTelemetry(fallbackResult.error, {
+					primaryResult,
+					primary,
+					reason: reason as CascadeReason,
+					threshold,
+					requestCount: 2,
+				});
+			}
+			const fallback = parseRawSelection(fallbackResult.value, allowedChoices, requiresAmbiguity);
 			if (!fallback) {
-				return {
-					ok: false,
-					error: {
+				return withTelemetry(
+					{
 						code: "invalid-fallback-response",
 						message: "fallback response is missing a valid selection decision",
 					},
-				};
+					{
+						primaryResult,
+						primary,
+						reason: reason as CascadeReason,
+						threshold,
+						requestCount: 2,
+					},
+				);
 			}
 			return {
 				ok: true,

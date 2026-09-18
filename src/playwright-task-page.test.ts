@@ -142,6 +142,30 @@ describe.runIf(browserAvailable)("Playwright synthetic task execution", () => {
 		}
 	});
 
+	it("polls a deterministic postcondition within the action timeout", async () => {
+		const browser = await chromium.launch({
+			headless: true,
+			...(executablePath ? { executablePath } : {}),
+		});
+		try {
+			const page = await browser.newPage();
+			await page.setContent("<output id='result'>waiting</output>");
+			await page.evaluate(() => {
+				setTimeout(() => {
+					const result = document.querySelector("#result");
+					if (result) result.textContent = "done";
+				}, 100);
+			});
+			const taskPage = createPlaywrightTaskPage(page);
+
+			await expect(
+				taskPage.verify({ type: "text", selector: "#result", equals: "done" }, 1_000),
+			).resolves.toEqual({ ok: true, value: undefined });
+		} finally {
+			await browser.close();
+		}
+	});
+
 	it("completes a four-action task in a fresh browser", async () => {
 		const result = await runSyntheticTaskInNewBrowser(
 			task,

@@ -1,6 +1,6 @@
 // pattern: Functional Core
 import { describe, expect, it } from "vitest";
-import { parseShadowPlan, validateObservedUrl } from "./policy.js";
+import { parseShadowPlan, validateObservedFrames, validateObservedUrl } from "./policy.js";
 
 const publicPlan = {
 	version: 1,
@@ -11,6 +11,7 @@ const publicPlan = {
 	sourcePolicy: {
 		allowedHosts: ["shop.example"],
 		basis: "terms-reviewed",
+		providerDisclosure: "allowed",
 		reviewedAt: "2026-09-17",
 		note: "Public search pages reviewed for this bounded evaluation.",
 	},
@@ -68,6 +69,24 @@ describe("parseShadowPlan", () => {
 		});
 	});
 
+	it("rejects an accessibility observation containing a disallowed child frame", () => {
+		const parsed = parseShadowPlan(publicPlan);
+		if (!parsed.ok) throw new Error("fixture plan must parse");
+
+		expect(
+			validateObservedFrames(
+				["https://shop.example/search", "https://tracking.example/private-frame"],
+				parsed.value,
+			),
+		).toEqual({
+			ok: false,
+			error: {
+				code: "frame-host-not-allowed",
+				message: "observed frame host tracking.example is not in sourcePolicy.allowedHosts",
+			},
+		});
+	});
+
 	it.each([
 		[null, "invalid-plan"],
 		[{ ...publicPlan, version: 2 }, "invalid-plan"],
@@ -92,7 +111,18 @@ describe("parseShadowPlan", () => {
 			"invalid-plan",
 		],
 		[
+			{
+				...publicPlan,
+				sourcePolicy: { ...publicPlan.sourcePolicy, providerDisclosure: undefined },
+			},
+			"invalid-plan",
+		],
+		[
 			{ ...publicPlan, sourcePolicy: { ...publicPlan.sourcePolicy, reviewedAt: "yesterday" } },
+			"invalid-plan",
+		],
+		[
+			{ ...publicPlan, sourcePolicy: { ...publicPlan.sourcePolicy, reviewedAt: "2026-99-99" } },
 			"invalid-plan",
 		],
 		[

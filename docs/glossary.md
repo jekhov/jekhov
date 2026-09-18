@@ -91,6 +91,10 @@ Not: a legal opinion or a bypass for site terms and bot controls.
 Invariant: Jekhov validates the requested URL before navigation and the observed URL after redirects,
 before page-derived data reaches Jev.
 
+For public plans, `providerDisclosure: "allowed"` is a separate required declaration that the
+bounded public page fields may be disclosed to the configured selector provider. Source access and
+provider disclosure are independent decisions.
+
 ## Policy-enforcing Jev wrapper
 
 The injected process boundary that validates and limits a Jev request and response, pins provider

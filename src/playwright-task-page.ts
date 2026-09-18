@@ -1,6 +1,7 @@
 // pattern: Imperative Shell
 import type { Browser, Page } from "playwright";
 import { chromium } from "playwright";
+import { observePlaywrightPage } from "./playwright-observation.js";
 import type {
 	SyntheticTaskAction,
 	SyntheticTaskPage,
@@ -9,31 +10,10 @@ import type {
 import { parseSyntheticTaskPlan } from "./synthetic-task.js";
 import type { SyntheticTaskReport } from "./synthetic-task-run.js";
 import { runSyntheticTask } from "./synthetic-task-run.js";
-import type { JevEvaluator, PageObservation, Result } from "./types.js";
+import type { JevEvaluator, Result } from "./types.js";
 
 function failed(code: string, message: string): Result<undefined> {
 	return { ok: false, error: { code, message } };
-}
-
-async function observe(page: Page): Promise<Result<PageObservation>> {
-	try {
-		return {
-			ok: true,
-			value: {
-				url: page.url(),
-				title: await page.title(),
-				snapshot: await page.ariaSnapshotJSON({ mode: "ai" }),
-			},
-		};
-	} catch (error) {
-		return {
-			ok: false,
-			error: {
-				code: "browser-observation-failed",
-				message: error instanceof Error ? error.message : "Playwright observation failed",
-			},
-		};
-	}
 }
 
 async function act(page: Page, action: SyntheticTaskAction): Promise<Result<undefined>> {
@@ -68,34 +48,62 @@ function normalizeText(value: string | null): string {
 	return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function within<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+	return new Promise<T>((resolveWithin, rejectWithin) => {
+		const timer = setTimeout(
+			() => rejectWithin(new Error("postcondition check timed out")),
+			timeoutMs,
+		);
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolveWithin(value);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				rejectWithin(error);
+			},
+		);
+	});
+}
+
+async function postconditionMatches(
+	page: Page,
+	postcondition: SyntheticTaskPostcondition,
+): Promise<boolean> {
+	const locator = page.locator(postcondition.selector);
+	if ((await locator.count()) !== 1) return false;
+	if (postcondition.type === "checked") {
+		return (await locator.isChecked()) === postcondition.equals;
+	}
+	if (postcondition.type === "visible") {
+		return (await locator.isVisible()) === postcondition.equals;
+	}
+	if (postcondition.type === "value") {
+		return (await locator.inputValue()) === postcondition.equals;
+	}
+	return normalizeText(await locator.textContent()) === normalizeText(postcondition.equals);
+}
+
 async function verify(
 	page: Page,
 	postcondition: SyntheticTaskPostcondition,
+	timeoutMs: number,
 ): Promise<Result<undefined>> {
+	const deadline = Date.now() + timeoutMs;
 	try {
-		const locator = page.locator(postcondition.selector);
-		if ((await locator.count()) !== 1) {
-			return failed(
-				"postcondition-failed",
-				`postcondition selector ${JSON.stringify(postcondition.selector)} did not resolve once`,
-			);
+		while (Date.now() <= deadline) {
+			const remainingForCheck = Math.max(1, deadline - Date.now());
+			const matches = await within(postconditionMatches(page, postcondition), remainingForCheck);
+			if (matches) return { ok: true, value: undefined };
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) break;
+			await new Promise((resolveDelay) => setTimeout(resolveDelay, Math.min(50, remaining)));
 		}
-		let matches = false;
-		if (postcondition.type === "checked") {
-			matches = (await locator.isChecked()) === postcondition.equals;
-		} else if (postcondition.type === "visible") {
-			matches = (await locator.isVisible()) === postcondition.equals;
-		} else if (postcondition.type === "value") {
-			matches = (await locator.inputValue()) === postcondition.equals;
-		} else {
-			matches = normalizeText(await locator.textContent()) === normalizeText(postcondition.equals);
-		}
-		return matches
-			? { ok: true, value: undefined }
-			: failed(
-					"postcondition-failed",
-					`postcondition ${postcondition.type} did not match for ${JSON.stringify(postcondition.selector)}`,
-				);
+		return failed(
+			"postcondition-failed",
+			`postcondition ${postcondition.type} did not match within ${timeoutMs} milliseconds for ${JSON.stringify(postcondition.selector)}`,
+		);
 	} catch (error) {
 		return failed(
 			"postcondition-failed",
@@ -106,10 +114,10 @@ async function verify(
 
 export function createPlaywrightTaskPage(page: Page): SyntheticTaskPage {
 	return {
-		observe: () => observe(page),
+		observe: (timeoutMs) => observePlaywrightPage(page, timeoutMs),
 		currentUrl: () => page.url(),
 		act: (action) => act(page, action),
-		verify: (postcondition) => verify(page, postcondition),
+		verify: (postcondition, timeoutMs = 5_000) => verify(page, postcondition, timeoutMs),
 	};
 }
 

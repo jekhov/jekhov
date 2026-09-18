@@ -56,7 +56,8 @@ export function parseCodexBaselineRequest(input: unknown): Result<SelectionReque
 		!nonemptyString(input.state.goal) ||
 		!nonemptyString(input.state.intended_action) ||
 		!isRecord(input.state.page) ||
-		!nonemptyString(input.state.page.title) ||
+		typeof input.state.page.title !== "string" ||
+		input.state.page.title.length > 200 ||
 		!nonemptyString(input.state.page.url)
 	) {
 		return requestInvalid("request.state metadata is invalid");

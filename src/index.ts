@@ -38,7 +38,7 @@ export {
 } from "./jev-cli-evaluator.js";
 export { JEV_MODEL, MAX_JEV_REQUEST_BYTES } from "./jev-policy.js";
 export type { MiniwobTaskName } from "./miniwob.js";
-export { buildMiniwobTaskPlan, MINIWOB_REVISION, MINIWOB_TASKS } from "./miniwob.js";
+export { MINIWOB_REVISION, MINIWOB_TASKS } from "./miniwob.js";
 export type {
 	MiniwobBenchmarkCase,
 	MiniwobBenchmarkReport,
@@ -55,6 +55,7 @@ export type {
 	UsageCostEstimate,
 } from "./pricing.js";
 export { estimateUsageCost, parseEvaluationPricing } from "./pricing.js";
+export { JEKHOV_VERSION } from "./report-metadata.js";
 export { buildSelectionRequest, parseSelectionResponse } from "./selection.js";
 export { runShadowSelection } from "./shadow-run.js";
 export type {

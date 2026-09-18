@@ -21,3 +21,10 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run validate
       - run: npm run build
+      - name: Verify pinned MiniWoB integration
+        run: |
+          git -C "$RUNNER_TEMP" init miniwob-plusplus
+          git -C "$RUNNER_TEMP/miniwob-plusplus" remote add origin https://github.com/Farama-Foundation/miniwob-plusplus.git
+          git -C "$RUNNER_TEMP/miniwob-plusplus" fetch --depth 1 origin 7fd85d71a4b60325c6585396ec4f48377d049838
+          git -C "$RUNNER_TEMP/miniwob-plusplus" checkout --detach FETCH_HEAD
+          JEKHOV_MINIWOB_ROOT="$RUNNER_TEMP/miniwob-plusplus" npx vitest run src/miniwob-run.integration.test.ts

@@ -12,6 +12,7 @@ const plan: ShadowPlan = {
 	sourcePolicy: {
 		allowedHosts: ["shop.example"],
 		basis: "terms-reviewed",
+		providerDisclosure: "allowed",
 		reviewedAt: "2026-09-17",
 		note: "Public search pages reviewed for this bounded evaluation.",
 	},
@@ -70,7 +71,11 @@ describe("runShadowSelection", () => {
 			}),
 		};
 
-		const result = await runShadowSelection(plan, { browser, jev });
+		const result = await runShadowSelection(
+			plan,
+			{ browser, jev },
+			{ generatedAt: () => new Date("2026-09-18T12:00:00.000Z") },
+		);
 
 		expect(result.ok).toBe(true);
 		expect(browser.observe).toHaveBeenCalledOnce();
@@ -79,16 +84,23 @@ describe("runShadowSelection", () => {
 		expect(result.value.status).toBe("proposed");
 		expect(result.value.proposal?.ref).toBe("e2");
 		expect(result.value).toMatchObject({
+			version: 1,
+			jekhovVersion: "0.1.0",
+			generatedAt: "2026-09-18T12:00:00.000Z",
+			planSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+			sourcePolicySha256: expect.stringMatching(/^[a-f0-9]{64}$/),
 			selectionProfile: "choice-with-ambiguity",
 			choiceConfidence: 0.84,
 			choiceProbabilities: { c0: 0.94, none: 0.06 },
 			matchProbability: 0.96,
 			matchProbabilitySource: "unambiguous-noul",
 		});
+		expect(result.value.observedUrl).toBe("https://shop.example/[path]?page=[redacted]");
+		expect(result.value.proposal?.url).toBe("/[path]?page=[redacted]");
 		expect(result.value.executed).toBe(false);
 	});
 
-	it("runs the choice-only profile without duplicated candidate state", async () => {
+	it("runs the choice-only profile with wrapper-verifiable candidate state", async () => {
 		const browser: BrowserObserver = {
 			observe: vi.fn().mockResolvedValue({
 				ok: true,
@@ -101,7 +113,7 @@ describe("runShadowSelection", () => {
 		};
 		const jev: JevEvaluator = {
 			evaluate: vi.fn(async (request) => {
-				expect(request.state.candidates).toEqual([]);
+				expect(request.state.candidates).toHaveLength(1);
 				expect(request.questions).not.toHaveProperty("unambiguous_match");
 				return {
 					ok: true as const,

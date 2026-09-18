@@ -1,6 +1,7 @@
 // pattern: Imperative Shell
 import { runInspection } from "./inspection.js";
 import { parseShadowPlan } from "./policy.js";
+import { createReportMetadata } from "./report-metadata.js";
 import { buildSelectionRequest, parseSelectionResponse } from "./selection.js";
 import type {
 	BrowserObserver,
@@ -13,7 +14,7 @@ import type {
 export async function runShadowSelection(
 	input: unknown,
 	ports: { browser: BrowserObserver; jev: JevEvaluator },
-	options: { selectionProfile?: SelectionProfile } = {},
+	options: { selectionProfile?: SelectionProfile; generatedAt?: () => Date } = {},
 ): Promise<Result<ShadowReport>> {
 	const parsed = parseShadowPlan(input);
 	if (!parsed.ok) return parsed;
@@ -22,6 +23,8 @@ export async function runShadowSelection(
 	if (!inspected.ok) return inspected;
 
 	const base = {
+		version: 1 as const,
+		...createReportMetadata(plan, plan.sourcePolicy, options.generatedAt),
 		mode: "shadow" as const,
 		selectionProfile: options.selectionProfile ?? "choice-with-ambiguity",
 		executed: false as const,

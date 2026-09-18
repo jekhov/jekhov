@@ -30,6 +30,17 @@ function parseUrl(value: string): Result<URL> {
 	}
 }
 
+function isCalendarDate(value: string): boolean {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+	const [year, month, day] = value.split("-").map(Number);
+	const date = new Date(Date.UTC(year as number, (month as number) - 1, day));
+	return (
+		date.getUTCFullYear() === year &&
+		date.getUTCMonth() === (month as number) - 1 &&
+		date.getUTCDate() === day
+	);
+}
+
 export function parseShadowPlan(input: unknown): Result<ShadowPlan> {
 	if (!isRecord(input)) return fail("invalid-plan", "plan must be a JSON object");
 	if (input.version !== 1) return fail("invalid-plan", "plan.version must be 1");
@@ -54,7 +65,7 @@ export function parseShadowPlan(input: unknown): Result<ShadowPlan> {
 	}
 	if (
 		!nonemptyString(input.sourcePolicy.reviewedAt) ||
-		!/^\d{4}-\d{2}-\d{2}$/.test(input.sourcePolicy.reviewedAt)
+		!isCalendarDate(input.sourcePolicy.reviewedAt)
 	) {
 		return fail("invalid-plan", "sourcePolicy.reviewedAt must use YYYY-MM-DD");
 	}
@@ -72,6 +83,12 @@ export function parseShadowPlan(input: unknown): Result<ShadowPlan> {
 	if (!parsedUrl.ok) return parsedUrl;
 	const dataClass = input.dataClass as DataClass;
 	const basis = input.sourcePolicy.basis as SourcePolicyBasis;
+	if (dataClass === "public" && input.sourcePolicy.providerDisclosure !== "allowed") {
+		return fail(
+			"invalid-plan",
+			"public sourcePolicy.providerDisclosure must explicitly be allowed",
+		);
+	}
 	if (parsedUrl.value.protocol === "data:") {
 		if (dataClass !== "synthetic" || basis !== "synthetic") {
 			return fail("invalid-url-policy", "data URLs require synthetic data and policy basis");
@@ -105,6 +122,7 @@ export function parseShadowPlan(input: unknown): Result<ShadowPlan> {
 			sourcePolicy: {
 				allowedHosts: [...new Set(allowedHosts)],
 				basis,
+				...(dataClass === "public" ? { providerDisclosure: "allowed" as const } : {}),
 				reviewedAt: input.sourcePolicy.reviewedAt,
 				note: input.sourcePolicy.note.trim(),
 			},
@@ -115,6 +133,27 @@ export function parseShadowPlan(input: unknown): Result<ShadowPlan> {
 			},
 		},
 	};
+}
+
+export function validateObservedFrames(frameUrls: string[], plan: ShadowPlan): Result<undefined> {
+	for (const value of frameUrls) {
+		if (!value || value === "about:blank" || value === "about:srcdoc") continue;
+		const parsed = parseUrl(value);
+		if (!parsed.ok) {
+			return fail("invalid-observed-frame-url", "browser returned an invalid frame URL");
+		}
+		if (parsed.value.protocol === "data:" && plan.dataClass === "synthetic") continue;
+		if (
+			(parsed.value.protocol !== "https:" && parsed.value.protocol !== "http:") ||
+			!plan.sourcePolicy.allowedHosts.includes(parsed.value.hostname)
+		) {
+			return fail(
+				"frame-host-not-allowed",
+				`observed frame host ${parsed.value.hostname || "(none)"} is not in sourcePolicy.allowedHosts`,
+			);
+		}
+	}
+	return { ok: true, value: undefined };
 }
 
 export function validateObservedUrl(value: string, plan: ShadowPlan): Result<URL> {

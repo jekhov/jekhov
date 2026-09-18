@@ -55,6 +55,15 @@ try {
 	if (!wrapper.stdout.includes("public|synthetic")) {
 		throw new Error("installed Jev policy wrapper did not run");
 	}
+	await execFileAsync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"--eval",
+			"const packageRoot = await import('jekhov'); if (typeof packageRoot.runShadowSelection !== 'function' || typeof packageRoot.JEKHOV_VERSION !== 'string') process.exit(17);",
+		],
+		{ cwd: installDirectory, env: npmEnvironment, maxBuffer: 1024 * 1024 },
+	);
 	const selectorClient = join(installDirectory, "selector-client.mjs");
 	const taskReportPath = join(installDirectory, "task-report.json");
 	await writeFile(

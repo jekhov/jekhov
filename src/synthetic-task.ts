@@ -39,10 +39,10 @@ export type SyntheticTaskAction =
 	| { action: "check"; ref: string; checked: boolean; timeoutMs: number };
 
 export interface SyntheticTaskPage {
-	observe(): Promise<Result<PageObservation>>;
+	observe(timeoutMs?: number): Promise<Result<PageObservation>>;
 	currentUrl(): string;
 	act(action: SyntheticTaskAction): Promise<Result<undefined>>;
-	verify(postcondition: SyntheticTaskPostcondition): Promise<Result<undefined>>;
+	verify(postcondition: SyntheticTaskPostcondition, timeoutMs?: number): Promise<Result<undefined>>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
