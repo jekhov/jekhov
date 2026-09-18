@@ -6,6 +6,9 @@ Bounded [Jev](https://github.com/typesafe-ai/jev) element selection for standard
 Status: private `0.0.0` spike. It can inspect a page and ask Jev which element best matches one
 preplanned action. It cannot click, type, submit, or otherwise act.
 
+Canonical project terminology lives in [the Jekhov glossary](docs/glossary.md), which inherits the
+shared cross-project definitions used by the development workspace.
+
 ## Why
 
 General-purpose browser agents repeatedly send large page snapshots to a general LLM. This project

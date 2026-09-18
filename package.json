@@ -18,6 +18,7 @@
 	},
 	"files": [
 		"dist",
+		"docs/glossary.md",
 		"skills",
 		"README.md",
 		"LICENSE"

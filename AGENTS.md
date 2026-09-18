@@ -2,6 +2,8 @@
 
 Follow the parent workspace instructions.
 
+- Read `docs/glossary.md` before changing the design or implementation. It inherits the shared
+  project glossary and defines Jekhov-specific terminology.
 - Keep the runner shadow-only until a labeled calibration supports an action threshold.
 - Route production Jev requests through the policy-enforcing wrapper. Never add direct provider
   HTTP calls.
