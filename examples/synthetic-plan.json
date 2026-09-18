@@ -1,0 +1,18 @@
+{
+	"version": 1,
+	"mode": "shadow",
+	"goal": "Navigate a synthetic product catalogue",
+	"startUrl": "data:text/html,%3Ctitle%3EFixture%20catalogue%3C%2Ftitle%3E%3Cmain%3E%3Ch1%3EInventory%3C%2Fh1%3E%3Cnav%20aria-label%3D%22Pagination%22%3E%3Ca%20href%3D%22%23next%22%3ENext%3C%2Fa%3E%3C%2Fnav%3E%3Cbutton%3ESave%20search%3C%2Fbutton%3E%3C%2Fmain%3E",
+	"dataClass": "synthetic",
+	"sourcePolicy": {
+		"allowedHosts": [],
+		"basis": "synthetic",
+		"reviewedAt": "2026-09-17",
+		"note": "Repository-owned synthetic fixture."
+	},
+	"step": {
+		"id": "next-page",
+		"action": "click",
+		"goal": "Open the next page of product results"
+	}
+}

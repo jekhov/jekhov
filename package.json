@@ -1,0 +1,65 @@
+{
+	"name": "jev-playwright",
+	"version": "0.0.0",
+	"description": "Bounded Jev element selection for standard Playwright, starting in shadow mode.",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=22"
+	},
+	"bin": {
+		"jev-playwright": "./dist/cli.js"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"skills",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json && node scripts/set-cli-mode.mjs",
+		"dev": "vitest",
+		"fix": "biome check --write .",
+		"format:check": "biome format .",
+		"lint": "biome lint .",
+		"lint:dead": "knip && fallow dead-code",
+		"lint:dead:full": "knip && fallow",
+		"prepare": "husky",
+		"prepack": "npm run build",
+		"test": "vitest run --passWithNoTests",
+		"test:coverage": "vitest run --coverage --passWithNoTests",
+		"typecheck": "tsc --noEmit",
+		"validate": "npm run format:check && npm run lint && npm run typecheck && npm run test:coverage && npm run lint:dead"
+	},
+	"keywords": [
+		"jev",
+		"playwright",
+		"browser-automation",
+		"llm"
+	],
+	"license": "MIT",
+	"dependencies": {
+		"playwright": "1.63.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.14",
+		"@types/node": "22.20.3",
+		"@vitest/coverage-v8": "5.0.1",
+		"fallow": "3.27.0",
+		"happy-dom": "20.14.5",
+		"husky": "9.1.7",
+		"knip": "6.36.0",
+		"lint-staged": "17.5.1",
+		"typescript": "7.0.2",
+		"vitest": "5.0.1"
+	},
+	"lint-staged": {
+		"*.{ts,json,jsonc,md,yml,yaml}": "biome check --write --no-errors-on-unmatched"
+	}
+}

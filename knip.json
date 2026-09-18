@@ -1,0 +1,10 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"entry": ["src/cli.ts", "src/index.ts"],
+	"project": ["src/**/*.ts"],
+	"ignoreExportsUsedInFile": true,
+	"rules": {
+		"types": "warn",
+		"duplicates": "warn"
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"entry": ["src/**/*.ts"],
+	"ignorePatterns": ["dist/**", "node_modules/**", "coverage/**"],
+	"rules": {
+		"unused-types": "warn",
+		"duplicate-exports": "warn",
+		"unresolved-imports": "warn"
+	}
+}
