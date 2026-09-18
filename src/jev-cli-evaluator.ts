@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { DataClass, JevEvaluator, Result } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -85,5 +86,12 @@ export function createJevCliEvaluator(options: {
 	return createSelectionCliEvaluator({
 		...options,
 		failureCode: "jev-client-failed",
+	});
+}
+
+export function createBundledJevEvaluator(options: { timeoutMs?: number } = {}): JevEvaluator {
+	return createJevCliEvaluator({
+		clientPath: fileURLToPath(new URL("./jev-policy-client.js", import.meta.url)),
+		...options,
 	});
 }

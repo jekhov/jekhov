@@ -19,6 +19,27 @@ const plan: ShadowPlan = {
 };
 
 describe("runShadowSelection", () => {
+	it("validates untrusted plans before observing a page or calling Jev", async () => {
+		const browser: BrowserObserver = { observe: vi.fn() };
+		const jev: JevEvaluator = { evaluate: vi.fn() };
+		const invalidPlan = {
+			...plan,
+			startUrl: "https://unreviewed.example/private",
+		};
+
+		const result = await runShadowSelection(invalidPlan, { browser, jev });
+
+		expect(result).toEqual({
+			ok: false,
+			error: {
+				code: "host-not-allowed",
+				message: "startUrl host unreviewed.example is not in sourcePolicy.allowedHosts",
+			},
+		});
+		expect(browser.observe).not.toHaveBeenCalled();
+		expect(jev.evaluate).not.toHaveBeenCalled();
+	});
+
 	it("observes and evaluates once without asking the browser to act", async () => {
 		const browser: BrowserObserver = {
 			observe: vi.fn().mockResolvedValue({

@@ -1,30 +1,55 @@
 #!/usr/bin/env node
 // pattern: Imperative Shell
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs } from "./cli-args.js";
 import { parseEvaluationCorpus } from "./evaluation-corpus.js";
 import { runEvaluationCorpus } from "./evaluation-run.js";
 import { runInspection } from "./inspection.js";
-import { createJevCliEvaluator, createSelectionCliEvaluator } from "./jev-cli-evaluator.js";
+import {
+	createBundledJevEvaluator,
+	createJevCliEvaluator,
+	createSelectionCliEvaluator,
+} from "./jev-cli-evaluator.js";
 import { createPlaywrightObserver } from "./playwright-observer.js";
 import { parseShadowPlan } from "./policy.js";
 import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
 import { runShadowSelection } from "./shadow-run.js";
-import type { Failure, Result } from "./types.js";
+import type { Failure, Result, ShadowPlan } from "./types.js";
 
 const USAGE = `Usage:
+  jekhov demo [--chromium PATH] [--output REPORT.json]
   jekhov inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
   jekhov shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
   jekhov evaluate --corpus CORPUS.json --baseline-client PATH [--jev-client PATH] [--pricing RATES.json] [--output REPORT.json]
 
-inspect costs no Jev request. shadow proposes an element but never acts.
-evaluate replays a private corpus through Jev and baseline wrappers; it never opens a browser or acts.`;
+demo runs one bundled synthetic shadow selection. inspect costs no Jev request.
+shadow proposes an element but never acts.
+evaluate replays a declared public or synthetic corpus through selector wrappers; it never opens a browser or acts.`;
 
 const MAX_CORPUS_BYTES = 5 * 1024 * 1024;
 const BASELINE_WRAPPER_TIMEOUT_MS = 130_000;
+const DEMO_PLAN: ShadowPlan = {
+	version: 1,
+	mode: "shadow",
+	goal: "Navigate a synthetic product catalogue",
+	startUrl:
+		"data:text/html,%3Ctitle%3EJekhov%20demo%3C%2Ftitle%3E%3Cmain%3E%3Ch1%3EInventory%3C%2Fh1%3E%3Cnav%20aria-label%3D%22Pagination%22%3E%3Ca%20href%3D%22%23previous%22%3EPrevious%3C%2Fa%3E%3Ca%20href%3D%22%23next%22%3ENext%3C%2Fa%3E%3C%2Fnav%3E%3Cbutton%3ESave%20search%3C%2Fbutton%3E%3C%2Fmain%3E",
+	dataClass: "synthetic",
+	sourcePolicy: {
+		allowedHosts: [],
+		basis: "synthetic",
+		reviewedAt: "2026-09-18",
+		note: "Bundled repository-owned synthetic demonstration.",
+	},
+	step: {
+		id: "next-page",
+		action: "click",
+		goal: "Open the next page of product results",
+	},
+};
 
 async function readJson(
 	path: string,
@@ -64,8 +89,9 @@ function reportFailure(failure: Failure): number {
 	return 1;
 }
 
-function defaultJevClientPath(): string {
-	return join(homedir(), ".agents/skills/jev/scripts/jev-client.mjs");
+function configuredJevEvaluator(clientPath?: string) {
+	const override = clientPath ?? process.env.JEV_CLIENT_PATH;
+	return override ? createJevCliEvaluator({ clientPath: override }) : createBundledJevEvaluator();
 }
 
 async function emitResult(value: unknown, outputPath?: string): Promise<number> {
@@ -128,12 +154,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 			[
 				{
 					name: "jev",
-					evaluator: createJevCliEvaluator({
-						clientPath:
-							parsedArgs.value.jevClientPath ??
-							process.env.JEV_CLIENT_PATH ??
-							defaultJevClientPath(),
-					}),
+					evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
 				},
 				{
 					name: "baseline",
@@ -153,9 +174,13 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		return emitResult(result.value, parsedArgs.value.outputPath);
 	}
 
-	const loaded = await readJson(parsedArgs.value.planPath, { failureCode: "plan-read-failed" });
-	if (!loaded.ok) return reportFailure(loaded.error);
-	const plan = parseShadowPlan(loaded.value);
+	let rawPlan: unknown = DEMO_PLAN;
+	if (parsedArgs.value.command !== "demo") {
+		const loaded = await readJson(parsedArgs.value.planPath, { failureCode: "plan-read-failed" });
+		if (!loaded.ok) return reportFailure(loaded.error);
+		rawPlan = loaded.value;
+	}
+	const plan = parseShadowPlan(rawPlan);
 	if (!plan.ok) return reportFailure(plan.error);
 	const executablePath =
 		parsedArgs.value.chromiumPath ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -166,18 +191,16 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 			? await runInspection(plan.value, browser)
 			: await runShadowSelection(plan.value, {
 					browser,
-					jev: createJevCliEvaluator({
-						clientPath:
-							parsedArgs.value.jevClientPath ??
-							process.env.JEV_CLIENT_PATH ??
-							defaultJevClientPath(),
-					}),
+					jev: configuredJevEvaluator(parsedArgs.value.jevClientPath),
 				});
 	if (!result.ok) return reportFailure(result.error);
 	return emitResult(result.value, parsedArgs.value.outputPath);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href
+) {
 	runCli().then((code) => {
 		process.exitCode = code;
 	});

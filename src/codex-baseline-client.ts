@@ -2,6 +2,7 @@
 // pattern: Imperative Shell
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -210,7 +211,10 @@ export async function runCodexBaselineClient(
 	}
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(realpathSync(resolve(process.argv[1]))).href
+) {
 	runCodexBaselineClient().then((code) => {
 		process.exitCode = code;
 	});

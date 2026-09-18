@@ -1,7 +1,34 @@
 // pattern: Imperative Shell
-import type { Browser } from "playwright";
+import type { Browser, Page } from "playwright";
 import { chromium } from "playwright";
-import type { BrowserObserver } from "./types.js";
+import type { BrowserObserver, PageObservation, Result } from "./types.js";
+
+async function observePage(page: Page): Promise<Result<PageObservation>> {
+	try {
+		return {
+			ok: true,
+			value: {
+				url: page.url(),
+				title: await page.title(),
+				snapshot: await page.ariaSnapshotJSON({ mode: "ai" }),
+			},
+		};
+	} catch (error) {
+		return {
+			ok: false,
+			error: {
+				code: "browser-observation-failed",
+				message: error instanceof Error ? error.message : "Playwright observation failed",
+			},
+		};
+	}
+}
+
+export function createPlaywrightPageObserver(page: Page): BrowserObserver {
+	return {
+		observe: () => observePage(page),
+	};
+}
 
 export function createPlaywrightObserver(
 	options: { executablePath?: string; navigationTimeoutMs?: number } = {},
@@ -19,14 +46,7 @@ export function createPlaywrightObserver(
 					waitUntil: "domcontentloaded",
 					timeout: options.navigationTimeoutMs ?? 20_000,
 				});
-				return {
-					ok: true,
-					value: {
-						url: page.url(),
-						title: await page.title(),
-						snapshot: await page.ariaSnapshotJSON({ mode: "ai" }),
-					},
-				};
+				return await observePage(page);
 			} catch (error) {
 				return {
 					ok: false,

@@ -18,6 +18,7 @@ export default defineConfig({
 				"src/evaluation-run.ts",
 				"src/index.ts",
 				"src/jev-cli-evaluator.ts",
+				"src/jev-policy-client.ts",
 				"src/playwright-observer.ts",
 			],
 			thresholds: {

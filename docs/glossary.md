@@ -1,9 +1,8 @@
 # Jekhov Glossary
 
-Jekhov inherits the shared project glossary at `~/.claude/rules/glossary.md`. Shared terms such as
-**abstention**, **bounded**, **candidate**, **gate**, **observation**, **postcondition**, **proposal**,
-and **shadow mode** keep their canonical meanings here. This file defines Jekhov-specific terms and
-explicit refinements only.
+This public glossary defines Jekhov's project vocabulary. Terms such as **abstention**, **bounded**,
+**candidate**, **gate**, **observation**, **postcondition**, **proposal**, and **shadow mode** keep
+their ordinary technical meanings unless refined below.
 
 ## Accessibility snapshot
 
@@ -98,7 +97,7 @@ Invariant: `executed` is always `false`.
 A future mode that would perform a proposed browser action only after calibrated and deterministic
 gates pass.
 
-Not: current functionality. No action mode exists in version `0.0.0`.
+Not: current functionality. No action mode exists in version `0.1.0`.
 
 ## Evaluation case
 

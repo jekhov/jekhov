@@ -28,8 +28,15 @@ export type {
 	EvaluationSelectorReport,
 } from "./evaluation-run.js";
 export { runEvaluationCorpus } from "./evaluation-run.js";
-export { createJevCliEvaluator, createSelectionCliEvaluator } from "./jev-cli-evaluator.js";
-export { createPlaywrightObserver } from "./playwright-observer.js";
+export type { InspectionReport } from "./inspection.js";
+export { runInspection } from "./inspection.js";
+export {
+	createBundledJevEvaluator,
+	createJevCliEvaluator,
+	createSelectionCliEvaluator,
+} from "./jev-cli-evaluator.js";
+export { JEV_MODEL, MAX_JEV_REQUEST_BYTES } from "./jev-policy.js";
+export { createPlaywrightObserver, createPlaywrightPageObserver } from "./playwright-observer.js";
 export { parseShadowPlan, validateObservedUrl } from "./policy.js";
 export type {
 	EvaluationPricing,
@@ -45,9 +52,13 @@ export type {
 	ActionCandidate,
 	BrowserAction,
 	BrowserObserver,
+	CandidateSet,
 	DataClass,
 	JevEvaluator,
+	PageObservation,
+	ParsedSelection,
 	Result,
+	SelectionRequest,
 	ShadowPlan,
 	ShadowReport,
 	SourcePolicy,

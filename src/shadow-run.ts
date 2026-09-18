@@ -1,12 +1,16 @@
 // pattern: Imperative Shell
 import { runInspection } from "./inspection.js";
+import { parseShadowPlan } from "./policy.js";
 import { buildSelectionRequest, parseSelectionResponse } from "./selection.js";
-import type { BrowserObserver, JevEvaluator, Result, ShadowPlan, ShadowReport } from "./types.js";
+import type { BrowserObserver, JevEvaluator, Result, ShadowReport } from "./types.js";
 
 export async function runShadowSelection(
-	plan: ShadowPlan,
+	input: unknown,
 	ports: { browser: BrowserObserver; jev: JevEvaluator },
 ): Promise<Result<ShadowReport>> {
+	const parsed = parseShadowPlan(input);
+	if (!parsed.ok) return parsed;
+	const plan = parsed.value;
 	const inspected = await runInspection(plan, ports.browser);
 	if (!inspected.ok) return inspected;
 

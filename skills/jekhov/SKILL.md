@@ -31,9 +31,11 @@ From the repository root:
 3. Review the candidates for missing or over-broad elements.
 4. Run one shadow selection through the policy-enforcing wrapper:
 
-   ```sh
-   node dist/cli.js shadow --plan PLAN.json --jev-client /path/to/jev-client.mjs
-   ```
+	```sh
+	node dist/cli.js shadow --plan PLAN.json
+	```
+
+	Use `--jev-client` only to substitute another audited policy wrapper.
 
 5. Preserve the report with its usage and provenance in private storage. Treat `proposal` as
    advisory and do not click, fill, select, or check it.
@@ -48,5 +50,6 @@ From the repository root:
 - `executed` must remain `false` in this version.
 
 Keep deterministic extraction, source policy, budgets, postconditions, and irreversible-action
-rules outside Jev. Keep evaluation corpora and performance results private unless the provider has
-authorized publication.
+rules outside Jev. The checked-in repository-owned synthetic corpora are public; keep real-page
+corpora, provider outputs, and performance results private unless publication is separately
+authorized.

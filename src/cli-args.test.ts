@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { parseCliArgs } from "./cli-args.js";
 
 describe("parseCliArgs", () => {
+	it("parses the bundled synthetic demo", () => {
+		expect(
+			parseCliArgs(["demo", "--jev-client", "client.mjs", "--chromium", "/usr/bin/chromium"]),
+		).toEqual({
+			ok: true,
+			value: {
+				command: "demo",
+				jevClientPath: "client.mjs",
+				chromiumPath: "/usr/bin/chromium",
+			},
+		});
+	});
+
 	it("parses a zero-cost inspection", () => {
 		expect(
 			parseCliArgs(["inspect", "--plan", "plan.json", "--chromium", "/usr/bin/chromium"]),
@@ -105,14 +118,27 @@ describe("parseCliArgs", () => {
 		});
 		expect(parseCliArgs([])).toEqual({
 			ok: false,
-			error: { code: "invalid-cli", message: "command must be evaluate, inspect, or shadow" },
+			error: {
+				code: "invalid-cli",
+				message: "command must be demo, evaluate, inspect, or shadow",
+			},
+		});
+	});
+
+	it("rejects a plan override for the fixed demo", () => {
+		expect(parseCliArgs(["demo", "--plan", "plan.json"])).toEqual({
+			ok: false,
+			error: { code: "invalid-cli", message: "unknown argument: --plan" },
 		});
 	});
 
 	it("rejects unsupported commands and flags", () => {
 		expect(parseCliArgs(["act", "--plan", "plan.json"])).toEqual({
 			ok: false,
-			error: { code: "invalid-cli", message: "command must be evaluate, inspect, or shadow" },
+			error: {
+				code: "invalid-cli",
+				message: "command must be demo, evaluate, inspect, or shadow",
+			},
 		});
 		expect(parseCliArgs(["inspect", "--plan", "plan.json", "--click"])).toEqual({
 			ok: false,

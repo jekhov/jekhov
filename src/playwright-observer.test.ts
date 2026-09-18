@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { chromium } from "playwright";
 import { describe, expect, it } from "vitest";
-import { createPlaywrightObserver } from "./playwright-observer.js";
+import { createPlaywrightObserver, createPlaywrightPageObserver } from "./playwright-observer.js";
 
 const managedChromium = chromium.executablePath();
 const executablePath =
@@ -34,5 +34,27 @@ describe.runIf(browserAvailable)("createPlaywrightObserver", () => {
 				}),
 			]),
 		);
+	});
+
+	it("observes an existing Page without navigating or closing it", async () => {
+		const browser = await chromium.launch({
+			headless: true,
+			...(executablePath ? { executablePath } : {}),
+		});
+		try {
+			const page = await browser.newPage();
+			const url = "data:text/html,<title>Existing</title><button>Choose me</button>";
+			await page.goto(url);
+			const observer = createPlaywrightPageObserver(page);
+
+			const result = await observer.observe(url);
+
+			expect(result.ok).toBe(true);
+			expect(page.url()).toBe(url);
+			expect(await page.title()).toBe("Existing");
+			expect(page.isClosed()).toBe(false);
+		} finally {
+			await browser.close();
+		}
 	});
 });

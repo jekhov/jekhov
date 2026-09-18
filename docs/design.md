@@ -47,8 +47,9 @@ record the candidate set, expected candidate or abstention, selected candidate, 
 probability, request bytes, usage, cache status, and elapsed time. Compare accuracy and total token
 cost with a general-model Playwright baseline on the same tasks.
 
-Keep the corpus and results private. Do not publish provider benchmarks or performance results
-without confirming that the applicable provider agreement permits publication.
+The repository-owned synthetic corpora are approved for public distribution. Keep real-page
+corpora, provider outputs, benchmarks, and performance reports private unless their publication is
+separately authorized and the applicable agreements permit it.
 
 Do not infer a confidence threshold from a handful of examples. Action mode needs:
 

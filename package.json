@@ -1,15 +1,16 @@
 {
 	"name": "jekhov",
-	"version": "0.0.0",
-	"description": "Bounded Jev element selection for standard Playwright, starting in shadow mode.",
-	"private": true,
+	"version": "0.1.0",
+	"description": "Policy-bounded Jev element selection and calibration for standard Playwright.",
 	"type": "module",
+	"sideEffects": false,
 	"engines": {
 		"node": ">=22"
 	},
 	"bin": {
 		"jekhov": "./dist/cli.js",
-		"jekhov-codex-baseline": "./dist/codex-baseline-client.js"
+		"jekhov-codex-baseline": "./dist/codex-baseline-client.js",
+		"jekhov-jev-client": "./dist/jev-policy-client.js"
 	},
 	"exports": {
 		".": {
@@ -20,7 +21,9 @@
 	"files": [
 		"dist",
 		"config",
-		"docs/glossary.md",
+		"corpora",
+		"docs",
+		"examples",
 		"skills",
 		"README.md",
 		"LICENSE"
@@ -35,6 +38,7 @@
 		"lint:dead:full": "knip && fallow",
 		"prepare": "husky",
 		"prepack": "npm run build",
+		"package:check": "node scripts/package-smoke.mjs",
 		"test": "vitest run --passWithNoTests",
 		"test:coverage": "vitest run --coverage --passWithNoTests",
 		"typecheck": "tsc --noEmit",
@@ -46,8 +50,21 @@
 		"browser-automation",
 		"llm"
 	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/proptermalone/jekhov.git"
+	},
+	"bugs": {
+		"url": "https://github.com/proptermalone/jekhov/issues"
+	},
+	"homepage": "https://github.com/proptermalone/jekhov#readme",
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
 	"license": "MIT",
 	"dependencies": {
+		"@typesafe-ai/sdk": "0.6.0",
 		"playwright": "1.63.0"
 	},
 	"devDependencies": {
