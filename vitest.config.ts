@@ -14,6 +14,7 @@ export default defineConfig({
 			exclude: [
 				"src/**/*.test.ts",
 				"src/cli.ts",
+				"src/evaluation-run.ts",
 				"src/index.ts",
 				"src/jev-cli-evaluator.ts",
 				"src/playwright-observer.ts",

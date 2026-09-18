@@ -45,6 +45,55 @@ describe("parseCliArgs", () => {
 		});
 	});
 
+	it("parses an evaluation comparison with an explicit baseline wrapper", () => {
+		expect(
+			parseCliArgs([
+				"evaluate",
+				"--corpus",
+				"corpora/synthetic-v1.json",
+				"--jev-client",
+				"jev-client.mjs",
+				"--baseline-client",
+				"baseline-client.mjs",
+				"--output",
+				"reports/comparison.json",
+			]),
+		).toEqual({
+			ok: true,
+			value: {
+				command: "evaluate",
+				corpusPath: "corpora/synthetic-v1.json",
+				jevClientPath: "jev-client.mjs",
+				baselineClientPath: "baseline-client.mjs",
+				outputPath: "reports/comparison.json",
+			},
+		});
+	});
+
+	it("requires the corpus and baseline wrapper for evaluation", () => {
+		expect(parseCliArgs(["evaluate", "--baseline-client", "baseline.mjs"])).toEqual({
+			ok: false,
+			error: { code: "invalid-cli", message: "--corpus is required" },
+		});
+		expect(parseCliArgs(["evaluate", "--corpus", "corpus.json"])).toEqual({
+			ok: false,
+			error: { code: "invalid-cli", message: "--baseline-client is required" },
+		});
+	});
+
+	it("uses the default Jev wrapper and stdout when evaluation overrides are omitted", () => {
+		expect(
+			parseCliArgs(["evaluate", "--corpus", "corpus.json", "--baseline-client", "baseline.mjs"]),
+		).toEqual({
+			ok: true,
+			value: {
+				command: "evaluate",
+				corpusPath: "corpus.json",
+				baselineClientPath: "baseline.mjs",
+			},
+		});
+	});
+
 	it("supports help and reports missing flag values", () => {
 		expect(parseCliArgs(["--help"])).toEqual({ ok: true, value: { command: "help" } });
 		expect(parseCliArgs(["inspect", "--plan"])).toEqual({
@@ -53,14 +102,14 @@ describe("parseCliArgs", () => {
 		});
 		expect(parseCliArgs([])).toEqual({
 			ok: false,
-			error: { code: "invalid-cli", message: "command must be inspect or shadow" },
+			error: { code: "invalid-cli", message: "command must be evaluate, inspect, or shadow" },
 		});
 	});
 
 	it("rejects unsupported commands and flags", () => {
 		expect(parseCliArgs(["act", "--plan", "plan.json"])).toEqual({
 			ok: false,
-			error: { code: "invalid-cli", message: "command must be inspect or shadow" },
+			error: { code: "invalid-cli", message: "command must be evaluate, inspect, or shadow" },
 		});
 		expect(parseCliArgs(["inspect", "--plan", "plan.json", "--click"])).toEqual({
 			ok: false,

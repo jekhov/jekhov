@@ -14,6 +14,7 @@ function runClient(
 	responsePath: string,
 	dataClass: DataClass,
 	timeoutMs: number,
+	failureCode: string,
 ): Promise<Result<undefined>> {
 	return new Promise((resolveResult) => {
 		execFile(
@@ -29,7 +30,7 @@ function runClient(
 				resolveResult({
 					ok: false,
 					error: {
-						code: "jev-client-failed",
+						code: failureCode,
 						message: detail.slice(0, MAX_ERROR_CHARS),
 					},
 				});
@@ -38,9 +39,10 @@ function runClient(
 	});
 }
 
-export function createJevCliEvaluator(options: {
+export function createSelectionCliEvaluator(options: {
 	clientPath: string;
 	timeoutMs?: number;
+	failureCode: string;
 }): JevEvaluator {
 	return {
 		async evaluate(request, dataClass) {
@@ -55,6 +57,7 @@ export function createJevCliEvaluator(options: {
 					responsePath,
 					dataClass,
 					options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+					options.failureCode,
 				);
 				if (!ran.ok) return ran;
 				try {
@@ -73,4 +76,14 @@ export function createJevCliEvaluator(options: {
 			}
 		},
 	};
+}
+
+export function createJevCliEvaluator(options: {
+	clientPath: string;
+	timeoutMs?: number;
+}): JevEvaluator {
+	return createSelectionCliEvaluator({
+		...options,
+		failureCode: "jev-client-failed",
+	});
 }

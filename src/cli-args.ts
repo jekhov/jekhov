@@ -4,6 +4,13 @@ import type { Result } from "./types.js";
 export type CliOptions =
 	| { command: "help" }
 	| {
+			command: "evaluate";
+			corpusPath: string;
+			baselineClientPath: string;
+			outputPath?: string;
+			jevClientPath?: string;
+	  }
+	| {
 			command: "inspect" | "shadow";
 			planPath: string;
 			outputPath?: string;
@@ -18,18 +25,36 @@ function invalid(message: string): Result<CliOptions> {
 export function parseCliArgs(argv: string[]): Result<CliOptions> {
 	if (argv[0] === "--help" || argv[0] === "-h") return { ok: true, value: { command: "help" } };
 	const command = argv[0];
-	if (command !== "inspect" && command !== "shadow") {
-		return invalid("command must be inspect or shadow");
+	if (command !== "evaluate" && command !== "inspect" && command !== "shadow") {
+		return invalid("command must be evaluate, inspect, or shadow");
 	}
 
 	const values: Record<string, string> = {};
-	const allowed = new Set(["--chromium", "--jev-client", "--output", "--plan"]);
+	const allowed = new Set(
+		command === "evaluate"
+			? ["--baseline-client", "--corpus", "--jev-client", "--output"]
+			: ["--chromium", "--jev-client", "--output", "--plan"],
+	);
 	for (let index = 1; index < argv.length; index += 2) {
 		const flag = argv[index];
 		if (!flag || !allowed.has(flag)) return invalid(`unknown argument: ${flag ?? "(missing)"}`);
 		const value = argv[index + 1];
 		if (!value || value.startsWith("--")) return invalid(`${flag} requires a value`);
 		values[flag] = value;
+	}
+	if (command === "evaluate") {
+		if (!values["--corpus"]) return invalid("--corpus is required");
+		if (!values["--baseline-client"]) return invalid("--baseline-client is required");
+		return {
+			ok: true,
+			value: {
+				command,
+				corpusPath: values["--corpus"],
+				baselineClientPath: values["--baseline-client"],
+				...(values["--jev-client"] ? { jevClientPath: values["--jev-client"] } : {}),
+				...(values["--output"] ? { outputPath: values["--output"] } : {}),
+			},
+		};
 	}
 	if (!values["--plan"]) return invalid("--plan is required");
 

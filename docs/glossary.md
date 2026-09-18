@@ -99,3 +99,26 @@ A future mode that would perform a proposed browser action only after calibrated
 gates pass.
 
 Not: current functionality. No action mode exists in version `0.0.0`.
+
+## Evaluation case
+
+A stored plan, page observation, and human-supplied label naming the expected local element reference
+or explicit abstention.
+
+Not: a live browser run or a prompt containing the answer.
+
+Invariants:
+
+- The label remains outside every selector request.
+- A non-null expected reference must survive deterministic candidate filtering for the planned
+  action.
+- The plan's source policy applies to the stored observation URL.
+
+## Selector evaluation
+
+A shadow-only replay of an evaluation corpus through one or more injected selection wrappers.
+
+Not: browser-agent benchmarking, an action threshold, or evidence that a proposed action is safe.
+
+Invariant: execution is sequential and bounded to at most one wrapper request per selector per
+case; no browser action exists on this path.

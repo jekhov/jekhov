@@ -3,7 +3,7 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createJevCliEvaluator } from "./jev-cli-evaluator.js";
+import { createJevCliEvaluator, createSelectionCliEvaluator } from "./jev-cli-evaluator.js";
 import { buildSelectionRequest } from "./selection.js";
 
 const temporaryDirectories: string[] = [];
@@ -66,6 +66,21 @@ writeFileSync(args["--output"], JSON.stringify({
 		await expect(evaluator.evaluate(request, "public")).resolves.toEqual({
 			ok: false,
 			error: { code: "jev-client-failed", message: "policy denied" },
+		});
+	});
+
+	it("lets a non-Jev baseline wrapper identify its boundary failures", async () => {
+		const clientPath = await fakeClient(
+			`process.stderr.write("baseline denied\\n"); process.exit(3);`,
+		);
+		const evaluator = createSelectionCliEvaluator({
+			clientPath,
+			failureCode: "baseline-client-failed",
+		});
+
+		await expect(evaluator.evaluate(request, "synthetic")).resolves.toEqual({
+			ok: false,
+			error: { code: "baseline-client-failed", message: "baseline denied" },
 		});
 	});
 

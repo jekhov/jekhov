@@ -70,6 +70,31 @@ The report includes request bytes, provider usage, cache status, elapsed time, t
 or abstention, and `executed: false`. Each shadow step makes at most one Jev request containing one
 choice question and one probability question.
 
+## Private evaluation
+
+The repository includes a first synthetic corpus at `corpora/synthetic-v1.json`. Corpus contents and
+provider results are private working material: they are excluded from the npm package and must not
+be published without review.
+
+Compare Jev with a general-model selector wrapper that implements the same file-based protocol:
+
+```sh
+node dist/cli.js evaluate \
+  --corpus corpora/synthetic-v1.json \
+  --baseline-client /path/to/general-model-wrapper.mjs \
+  --output reports/synthetic-v1.json
+```
+
+Use `--jev-client` to override the default policy-enforcing Jev wrapper. Both wrapper paths receive
+one bounded selection request at a time. Evaluation runs sequentially and makes at most one request
+per selector per case. It replays observations without launching a browser and always reports
+`executed: false`.
+
+The report separates explicit provider abstention from deterministic no-candidate cases. It records
+correctness, proposal precision, abstention rates, request bytes, elapsed time, numeric usage fields,
+and wrapper-reported USD cost. Missing cost stays missing; Jekhov does not estimate it from token
+counts. This selector comparison is not yet a full general-model Playwright-agent baseline.
+
 ## Plan format
 
 ```json

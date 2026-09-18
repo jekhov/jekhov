@@ -5,8 +5,10 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs } from "./cli-args.js";
+import { parseEvaluationCorpus } from "./evaluation-corpus.js";
+import { runEvaluationCorpus } from "./evaluation-run.js";
 import { runInspection } from "./inspection.js";
-import { createJevCliEvaluator } from "./jev-cli-evaluator.js";
+import { createJevCliEvaluator, createSelectionCliEvaluator } from "./jev-cli-evaluator.js";
 import { createPlaywrightObserver } from "./playwright-observer.js";
 import { parseShadowPlan } from "./policy.js";
 import { runShadowSelection } from "./shadow-run.js";
@@ -15,18 +17,35 @@ import type { Failure, Result } from "./types.js";
 const USAGE = `Usage:
   jekhov inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
   jekhov shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
+  jekhov evaluate --corpus CORPUS.json --baseline-client PATH [--jev-client PATH] [--output REPORT.json]
 
-inspect costs no Jev request. shadow proposes an element but never acts.`;
+inspect costs no Jev request. shadow proposes an element but never acts.
+evaluate replays a private corpus through Jev and baseline wrappers; it never opens a browser or acts.`;
 
-async function readPlan(path: string): Promise<Result<unknown>> {
+const MAX_CORPUS_BYTES = 5 * 1024 * 1024;
+
+async function readJson(
+	path: string,
+	options: { failureCode: string; maximumBytes?: number },
+): Promise<Result<unknown>> {
 	try {
-		return { ok: true, value: JSON.parse(await readFile(resolve(path), "utf8")) };
+		const text = await readFile(resolve(path), "utf8");
+		if (options.maximumBytes && Buffer.byteLength(text) > options.maximumBytes) {
+			return {
+				ok: false,
+				error: {
+					code: "corpus-too-large",
+					message: `corpus exceeds ${options.maximumBytes} bytes`,
+				},
+			};
+		}
+		return { ok: true, value: JSON.parse(text) };
 	} catch (error) {
 		return {
 			ok: false,
 			error: {
-				code: "plan-read-failed",
-				message: error instanceof Error ? error.message : "Could not read plan",
+				code: options.failureCode,
+				message: error instanceof Error ? error.message : "Could not read JSON input",
 			},
 		};
 	}
@@ -43,6 +62,22 @@ function reportFailure(failure: Failure): number {
 	return 1;
 }
 
+function defaultJevClientPath(): string {
+	return join(homedir(), ".agents/skills/jev/scripts/jev-client.mjs");
+}
+
+async function emitResult(value: unknown, outputPath?: string): Promise<number> {
+	try {
+		await emit(value, outputPath);
+		return 0;
+	} catch (error) {
+		return reportFailure({
+			code: "report-write-failed",
+			message: error instanceof Error ? error.message : "Could not write report",
+		});
+	}
+}
+
 export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 	const parsedArgs = parseCliArgs(argv);
 	if (!parsedArgs.ok) return reportFailure(parsedArgs.error);
@@ -50,7 +85,35 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		process.stdout.write(`${USAGE}\n`);
 		return 0;
 	}
-	const loaded = await readPlan(parsedArgs.value.planPath);
+	if (parsedArgs.value.command === "evaluate") {
+		const loadedCorpus = await readJson(parsedArgs.value.corpusPath, {
+			failureCode: "corpus-read-failed",
+			maximumBytes: MAX_CORPUS_BYTES,
+		});
+		if (!loadedCorpus.ok) return reportFailure(loadedCorpus.error);
+		const corpus = parseEvaluationCorpus(loadedCorpus.value);
+		if (!corpus.ok) return reportFailure(corpus.error);
+		const result = await runEvaluationCorpus(corpus.value, [
+			{
+				name: "jev",
+				evaluator: createJevCliEvaluator({
+					clientPath:
+						parsedArgs.value.jevClientPath ?? process.env.JEV_CLIENT_PATH ?? defaultJevClientPath(),
+				}),
+			},
+			{
+				name: "baseline",
+				evaluator: createSelectionCliEvaluator({
+					clientPath: parsedArgs.value.baselineClientPath,
+					failureCode: "baseline-client-failed",
+				}),
+			},
+		]);
+		if (!result.ok) return reportFailure(result.error);
+		return emitResult(result.value, parsedArgs.value.outputPath);
+	}
+
+	const loaded = await readJson(parsedArgs.value.planPath, { failureCode: "plan-read-failed" });
 	if (!loaded.ok) return reportFailure(loaded.error);
 	const plan = parseShadowPlan(loaded.value);
 	if (!plan.ok) return reportFailure(plan.error);
@@ -67,19 +130,11 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 						clientPath:
 							parsedArgs.value.jevClientPath ??
 							process.env.JEV_CLIENT_PATH ??
-							join(homedir(), ".agents/skills/jev/scripts/jev-client.mjs"),
+							defaultJevClientPath(),
 					}),
 				});
 	if (!result.ok) return reportFailure(result.error);
-	try {
-		await emit(result.value, parsedArgs.value.outputPath);
-		return 0;
-	} catch (error) {
-		return reportFailure({
-			code: "report-write-failed",
-			message: error instanceof Error ? error.message : "Could not write report",
-		});
-	}
+	return emitResult(result.value, parsedArgs.value.outputPath);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
