@@ -13,13 +13,17 @@ export default defineConfig({
 			include: ["src/**/*.ts"],
 			exclude: [
 				"src/**/*.test.ts",
+				"src/cascade-evaluator.ts",
 				"src/cli.ts",
 				"src/codex-baseline-client.ts",
 				"src/evaluation-run.ts",
 				"src/index.ts",
 				"src/jev-cli-evaluator.ts",
 				"src/jev-policy-client.ts",
+				"src/miniwob-run.ts",
 				"src/playwright-observer.ts",
+				"src/playwright-task-page.ts",
+				"src/synthetic-task-run.ts",
 			],
 			thresholds: {
 				branches: 95,

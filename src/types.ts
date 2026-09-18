@@ -97,6 +97,7 @@ export interface SelectionRequest {
 }
 
 export interface JevEvaluator {
+	maximumRequestCount?: number;
 	evaluate(request: SelectionRequest, dataClass: DataClass): Promise<Result<unknown>>;
 }
 

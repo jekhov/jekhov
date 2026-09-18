@@ -10,6 +10,7 @@ export type {
 } from "./calibration.js";
 export { buildCascadeCalibration, DEFAULT_CASCADE_THRESHOLDS } from "./calibration.js";
 export { collectActionCandidates } from "./candidates.js";
+export { createThresholdCascadeEvaluator } from "./cascade-evaluator.js";
 export type {
 	EvaluationCaseResult,
 	EvaluationOutcome,
@@ -36,7 +37,15 @@ export {
 	createSelectionCliEvaluator,
 } from "./jev-cli-evaluator.js";
 export { JEV_MODEL, MAX_JEV_REQUEST_BYTES } from "./jev-policy.js";
+export type { MiniwobTaskName } from "./miniwob.js";
+export { buildMiniwobTaskPlan, MINIWOB_REVISION, MINIWOB_TASKS } from "./miniwob.js";
+export type {
+	MiniwobBenchmarkCase,
+	MiniwobBenchmarkReport,
+} from "./miniwob-run.js";
+export { captureMiniwobCorpus, runMiniwobBenchmark } from "./miniwob-run.js";
 export { createPlaywrightObserver, createPlaywrightPageObserver } from "./playwright-observer.js";
+export { runSyntheticTaskInNewBrowser } from "./playwright-task-page.js";
 export { parseShadowPlan, validateObservedUrl } from "./policy.js";
 export type {
 	EvaluationPricing,
@@ -48,6 +57,13 @@ export type {
 export { estimateUsageCost, parseEvaluationPricing } from "./pricing.js";
 export { buildSelectionRequest, parseSelectionResponse } from "./selection.js";
 export { runShadowSelection } from "./shadow-run.js";
+export type {
+	SyntheticTaskPlan,
+	SyntheticTaskPostcondition,
+	SyntheticTaskStep,
+} from "./synthetic-task.js";
+export { parseSyntheticTaskPlan } from "./synthetic-task.js";
+export type { SyntheticTaskReport, SyntheticTaskStepReport } from "./synthetic-task-run.js";
 export type {
 	ActionCandidate,
 	BrowserAction,

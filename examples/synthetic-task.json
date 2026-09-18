@@ -1,0 +1,58 @@
+{
+	"version": 1,
+	"mode": "synthetic-task",
+	"goal": "Search the synthetic inventory for large used boots",
+	"startUrl": "data:text/html;base64,PHRpdGxlPkpla2hvdiB0YXNrPC90aXRsZT48bGFiZWw+UHJvZHVjdCA8aW5wdXQgaWQ9cT48L2xhYmVsPjxsYWJlbD5TaXplIDxzZWxlY3QgaWQ9c2l6ZT48b3B0aW9uIHZhbHVlPXNtYWxsPlNtYWxsPC9vcHRpb24+PG9wdGlvbiB2YWx1ZT1sYXJnZT5MYXJnZTwvb3B0aW9uPjwvc2VsZWN0PjwvbGFiZWw+PGxhYmVsPjxpbnB1dCBpZD11c2VkIHR5cGU9Y2hlY2tib3g+IFVzZWQgb25seTwvbGFiZWw+PGJ1dHRvbiBpZD1zZWFyY2ggb25jbGljaz0icmVzdWx0LnRleHRDb250ZW50PXEudmFsdWUrJyAvICcrc2l6ZS52YWx1ZSsnIC8gJysodXNlZC5jaGVja2VkPyd1c2VkJzonbmV3JykiPlNlYXJjaDwvYnV0dG9uPjxvdXRwdXQgaWQ9cmVzdWx0Pjwvb3V0cHV0Pg==",
+	"dataClass": "synthetic",
+	"sourcePolicy": {
+		"allowedHosts": [],
+		"basis": "synthetic",
+		"reviewedAt": "2026-09-18",
+		"note": "Repository-owned synthetic complete-task fixture."
+	},
+	"budget": {
+		"maxSteps": 4,
+		"maxJevRequests": 4,
+		"actionTimeoutMs": 5000
+	},
+	"steps": [
+		{
+			"id": "query",
+			"action": "fill",
+			"goal": "Enter boots as the product query",
+			"value": "boots",
+			"target": { "role": "textbox", "name": "Product" },
+			"postconditions": [{ "type": "value", "selector": "#q", "equals": "boots" }]
+		},
+		{
+			"id": "size",
+			"action": "select",
+			"goal": "Choose the large size",
+			"value": "large",
+			"target": { "role": "combobox", "name": "Size" },
+			"postconditions": [{ "type": "value", "selector": "#size", "equals": "large" }]
+		},
+		{
+			"id": "condition",
+			"action": "check",
+			"goal": "Limit the search to used products",
+			"checked": true,
+			"target": { "role": "checkbox", "name": "Used only" },
+			"postconditions": [{ "type": "checked", "selector": "#used", "equals": true }]
+		},
+		{
+			"id": "submit",
+			"action": "click",
+			"goal": "Submit the inventory search",
+			"target": { "role": "button", "name": "Search" },
+			"postconditions": [
+				{
+					"type": "text",
+					"selector": "#result",
+					"equals": "boots / large / used"
+				},
+				{ "type": "visible", "selector": "#result", "equals": true }
+			]
+		}
+	]
+}

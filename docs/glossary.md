@@ -99,6 +99,40 @@ gates pass.
 
 Not: current functionality. No action mode exists in version `0.1.0`.
 
+## Synthetic task harness
+
+A multi-step execution path restricted to repository-owned `data:` pages. Each step fixes its
+action, input, labeled target identity, deterministic postconditions, and resource budget before
+selection.
+
+Not: general action mode or autonomous browsing.
+
+Invariants:
+
+- Exactly one candidate must match the labeled role and accessible name before a Jev request.
+- The Jev proposal must exactly match that labeled identity before action.
+- A fresh accessibility snapshot must reproduce the selected local reference and identity.
+- Candidate truncation, abstention, label mismatch, stale state, disallowed navigation, or a failed
+  postcondition stops the task.
+- Labels remain outside the Jev request.
+- Repository data fixtures have an empty host allowlist and execute in an offline browser context.
+- An attempted action is reported as executed even if Playwright later returns an error;
+  confirmation is recorded separately and uncertain actions are never retried.
+
+## MiniWoB++ slice
+
+A pinned local benchmark adapter covering five MiniWoB++ templates with preplanned operations,
+Playwright accessibility observations, withheld labels, deterministic actions, and native rewards.
+
+Not: the complete MiniWoB++ or BrowserGym benchmark, or evidence of autonomous planning.
+
+Invariants:
+
+- Corpus capture uses no Jev request and labels duplicate target identities as expected abstentions.
+- Execution uses the synthetic task oracle gate and accepts success only when MiniWoB++ reports a
+  positive terminal reward.
+- The source revision, templates, seeds, action budgets, and report scope are explicit.
+
 ## Evaluation case
 
 A stored plan, page observation, and human-supplied label naming the expected local element reference
@@ -134,13 +168,16 @@ candidate set, or execute a browser action.
 
 ## Selector cascade
 
-An offline composition that accepts a primary selector proposal only when its match probability
-meets a tested threshold, otherwise substituting the result of a recorded fallback selector.
+A composition that accepts a primary selector proposal only when its match probability meets the
+declared threshold for that action, otherwise substituting a compatible fallback selector.
 
-Not: an action gate or a second live provider call in the current runner.
+Not: an action gate or permission to execute the resulting proposal.
 
-Invariant: primary errors and explicit abstentions always route to the fallback; the report retains
-the calls, usage, latency, and final labeled outcome for both legs.
+Invariants:
+
+- Primary errors, invalid responses, and explicit abstentions always route to the fallback.
+- Offline calibration retains both recorded outcomes, usage, latency, and final labeled outcome.
+- Live routing retains both legs' provenance and combined numeric usage.
 
 ## Calibration operating point
 

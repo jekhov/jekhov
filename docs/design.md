@@ -1,7 +1,7 @@
 # Working design
 
-This is a spike, not an architectural decision record. It becomes authoritative only after a
-calibrated shadow run and an explicit review.
+This working design is subordinate to
+[ADR 01](decisions/01-release-execution-boundary.md), which governs the release execution boundary.
 
 ## Current slice
 
@@ -25,8 +25,9 @@ source-policy gate -> Playwright ariaSnapshotJSON(mode: "ai")
 ```
 
 One general-model planning call can cover several future steps. Each step should then cost one
-bounded Jev call rather than another full-model page interpretation. The current runner implements
-one step so the cost and accuracy claim can be measured before a loop hides either failure mode.
+bounded Jev call rather than another full-model page interpretation. The public runner implements
+one shadow step. The separate synthetic harness implements a bounded multi-step loop behind withheld
+labels so selection and execution failures remain distinguishable.
 
 ## Deliberate constraints
 
@@ -35,10 +36,36 @@ one step so the cost and accuracy claim can be measured before a loop hides eith
 3. Candidate text is untrusted data. It never changes instructions or policy.
 4. Exact-host policy runs before navigation and again after redirects.
 5. No private, client, minor, legal, or unknown-class data enters Jev.
-6. No action mode exists. Confidence thresholds remain unset until calibration produces a measured
-   operating point.
+6. No general action mode exists. Confidence thresholds remain unset until calibration produces a
+   measured operating point. The synthetic task harness may act only when exactly one candidate
+   matches the fixture's withheld label and the selector proposes it.
 7. The browser adapter uses Playwright's public `ariaSnapshotJSON()` API. Element references remain
    local and never enter the Jev request.
+
+## Synthetic complete-task slice
+
+The executable test slice accepts only `data:` pages with synthetic source policy. It runs a bounded
+sequence of preplanned steps. Before each action it requires all of the following:
+
+1. the candidate set is complete under the configured cap;
+2. exactly one candidate matches the step's withheld role/name label and the selector proposes it;
+3. a new accessibility snapshot reproduces the proposal's reference, role, and name; and
+4. the browser is still within source policy.
+
+The action uses Playwright's `aria-ref` locator. Each step then validates the resulting URL and all
+declared value, checked, visibility, or text postconditions. Any failed gate stops the task. This
+exercises the plan/select/act/verify machinery without turning an uncalibrated probability into an
+action threshold.
+
+Repository data fixtures run in a browser context set offline before the page is created, with
+service workers blocked and an empty host allowlist. The MiniWoB++ path separately requires the
+exact served URL and a clean worktree at the pinned revision. The public package does not export the
+lower-level injected-page execution runner.
+
+The MiniWoB++ adapter applies the same loop to five pinned local task templates. Corpus capture uses
+the withheld oracle to advance the environment and records each accessibility snapshot for replay.
+Execution uses Jev, rechecks the target, acts through Playwright, and accepts task success only from
+MiniWoB++'s native reward. Neither path supplies open-ended planning.
 
 ## Measurement before action mode
 
@@ -47,9 +74,9 @@ record the candidate set, expected candidate or abstention, selected candidate, 
 probability, request bytes, usage, cache status, and elapsed time. Compare accuracy and total token
 cost with a general-model Playwright baseline on the same tasks.
 
-The repository-owned synthetic corpora are approved for public distribution. Keep real-page
-corpora, provider outputs, benchmarks, and performance reports private unless their publication is
-separately authorized and the applicable agreements permit it.
+The repository-owned synthetic corpora and the checked-in MiniWoB++ synthetic grounding corpus are
+approved for public distribution. Keep real-page corpora, provider outputs, and performance reports
+private unless their publication is separately authorized and the applicable agreements permit it.
 
 Do not infer a confidence threshold from a handful of examples. Action mode needs:
 
@@ -83,6 +110,12 @@ errors, explicit abstentions, and proposals below the tested match-probability t
 recorded general-model result. Each operating point reports final correctness, proposal precision,
 fallback rate, resource totals, estimated list-price cost, and per-action results. This is offline
 analysis only: it neither chooses a production threshold nor adds an action path.
+
+An injected live selector cascade can apply an externally chosen threshold for each action. It
+routes primary errors, abstentions, invalid responses, and low-probability proposals to a compatible
+fallback wrapper while preserving both legs' provenance and combined numeric usage. The cascade
+still returns only a proposal; execution remains subject to the task harness's independent gates.
+Its declared two-request bound is reserved against the task budget before either selector runs.
 
 The repo-owned general-model baseline sees the same bounded selection request as Jev. It runs
 `gpt-5.6-luna` at low reasoning effort through ephemeral, read-only `codex exec`, ignores user and

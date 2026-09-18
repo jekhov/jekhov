@@ -13,7 +13,9 @@ import {
 	createJevCliEvaluator,
 	createSelectionCliEvaluator,
 } from "./jev-cli-evaluator.js";
+import { captureMiniwobCorpus, runMiniwobBenchmark } from "./miniwob-run.js";
 import { createPlaywrightObserver } from "./playwright-observer.js";
+import { runSyntheticTaskInNewBrowser } from "./playwright-task-page.js";
 import { parseShadowPlan } from "./policy.js";
 import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
 import { runShadowSelection } from "./shadow-run.js";
@@ -23,10 +25,15 @@ const USAGE = `Usage:
   jekhov demo [--chromium PATH] [--output REPORT.json]
   jekhov inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
   jekhov shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
-  jekhov evaluate --corpus CORPUS.json --baseline-client PATH [--jev-client PATH] [--pricing RATES.json] [--output REPORT.json]
+  jekhov task --plan SYNTHETIC_TASK.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
+  jekhov miniwob capture --root MINIWOB_ROOT [--tasks NAMES] [--seeds SPEC] [--chromium PATH] [--output CORPUS.json]
+  jekhov miniwob run --root MINIWOB_ROOT [--tasks NAMES] [--seeds SPEC] [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
+  jekhov evaluate --corpus CORPUS.json [--baseline-client PATH] [--jev-client PATH] [--pricing RATES.json] [--output REPORT.json]
 
 demo runs one bundled synthetic shadow selection. inspect costs no Jev request.
 shadow proposes an element but never acts.
+task executes only labeled, oracle-gated synthetic steps with deterministic postconditions.
+miniwob capture builds a labeled corpus without Jev; miniwob run executes the oracle-gated slice.
 evaluate replays a declared public or synthetic corpus through selector wrappers; it never opens a browser or acts.`;
 
 const MAX_CORPUS_BYTES = 5 * 1024 * 1024;
@@ -149,26 +156,59 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 			if (!parsedPricing.ok) return reportFailure(parsedPricing.error);
 			pricing = parsedPricing.value;
 		}
-		const result = await runEvaluationCorpus(
-			corpus.value,
-			[
-				{
-					name: "jev",
-					evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
-				},
-				{
-					name: "baseline",
-					evaluator: createSelectionCliEvaluator({
-						clientPath: parsedArgs.value.baselineClientPath,
-						failureCode: "baseline-client-failed",
-						timeoutMs: BASELINE_WRAPPER_TIMEOUT_MS,
-					}),
-				},
-			],
+		const selectors = [
 			{
-				...(pricing ? { pricing } : {}),
-				cascade: { primarySelector: "jev", fallbackSelector: "baseline" },
+				name: "jev",
+				evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
 			},
+		];
+		if (parsedArgs.value.baselineClientPath) {
+			selectors.push({
+				name: "baseline",
+				evaluator: createSelectionCliEvaluator({
+					clientPath: parsedArgs.value.baselineClientPath,
+					failureCode: "baseline-client-failed",
+					timeoutMs: BASELINE_WRAPPER_TIMEOUT_MS,
+				}),
+			});
+		}
+		const result = await runEvaluationCorpus(corpus.value, selectors, {
+			...(pricing ? { pricing } : {}),
+			...(parsedArgs.value.baselineClientPath
+				? { cascade: { primarySelector: "jev", fallbackSelector: "baseline" } }
+				: {}),
+		});
+		if (!result.ok) return reportFailure(result.error);
+		return emitResult(result.value, parsedArgs.value.outputPath);
+	}
+	if (parsedArgs.value.command === "miniwob") {
+		const executablePath =
+			parsedArgs.value.chromiumPath ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+		const sharedOptions = {
+			rootPath: parsedArgs.value.rootPath,
+			...(parsedArgs.value.tasks ? { tasks: parsedArgs.value.tasks } : {}),
+			...(parsedArgs.value.seeds ? { seeds: parsedArgs.value.seeds } : {}),
+			...(executablePath ? { executablePath } : {}),
+		};
+		const result =
+			parsedArgs.value.operation === "capture"
+				? await captureMiniwobCorpus(sharedOptions)
+				: await runMiniwobBenchmark({
+						...sharedOptions,
+						jev: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+					});
+		if (!result.ok) return reportFailure(result.error);
+		return emitResult(result.value, parsedArgs.value.outputPath);
+	}
+	if (parsedArgs.value.command === "task") {
+		const loaded = await readJson(parsedArgs.value.planPath, { failureCode: "plan-read-failed" });
+		if (!loaded.ok) return reportFailure(loaded.error);
+		const executablePath =
+			parsedArgs.value.chromiumPath ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+		const result = await runSyntheticTaskInNewBrowser(
+			loaded.value,
+			configuredJevEvaluator(parsedArgs.value.jevClientPath),
+			{ ...(executablePath ? { executablePath } : {}) },
 		);
 		if (!result.ok) return reportFailure(result.error);
 		return emitResult(result.value, parsedArgs.value.outputPath);
