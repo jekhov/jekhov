@@ -1,4 +1,14 @@
 // pattern: Functional Core
+
+export type {
+	CascadeActionSummary,
+	CascadeCalibration,
+	CascadeCostSummary,
+	CascadeOperatingPoint,
+	CascadeOutcomeSummary,
+	CascadeRoutingSummary,
+} from "./calibration.js";
+export { buildCascadeCalibration, DEFAULT_CASCADE_THRESHOLDS } from "./calibration.js";
 export { collectActionCandidates } from "./candidates.js";
 export type {
 	EvaluationCaseResult,
@@ -21,6 +31,14 @@ export { runEvaluationCorpus } from "./evaluation-run.js";
 export { createJevCliEvaluator, createSelectionCliEvaluator } from "./jev-cli-evaluator.js";
 export { createPlaywrightObserver } from "./playwright-observer.js";
 export { parseShadowPlan, validateObservedUrl } from "./policy.js";
+export type {
+	EvaluationPricing,
+	PricingComponent,
+	SelectorPricing,
+	UsageCostComponent,
+	UsageCostEstimate,
+} from "./pricing.js";
+export { estimateUsageCost, parseEvaluationPricing } from "./pricing.js";
 export { buildSelectionRequest, parseSelectionResponse } from "./selection.js";
 export { runShadowSelection } from "./shadow-run.js";
 export type {

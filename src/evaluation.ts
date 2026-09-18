@@ -1,4 +1,6 @@
 // pattern: Functional Core
+
+import { estimateUsageCost, type SelectorPricing } from "./pricing.js";
 import type { BrowserAction, Failure } from "./types.js";
 
 export type EvaluationOutcome =
@@ -49,6 +51,21 @@ export interface EvaluationSummary {
 	meanElapsedMilliseconds: number | null;
 	usageTotals: Record<string, number>;
 	reportedCostUsd: { total: number; reportedCases: number };
+	cache: {
+		reportedRequests: number;
+		hits: number;
+		misses: number;
+		unreportedRequests: number;
+		hitRate: number | null;
+		coldElapsedMilliseconds: number;
+		meanColdElapsedMilliseconds: number | null;
+	};
+	apiListPriceUsd: {
+		total: number;
+		pricedRequests: number;
+		totalRequests: number;
+		complete: boolean;
+	} | null;
 }
 
 function divide(numerator: number, denominator: number): number | null {
@@ -78,7 +95,10 @@ export function classifyEvaluationOutcome(
 	return actualRef === expectedRef ? "correct-selection" : "wrong-selection";
 }
 
-export function summarizeEvaluationCases(cases: EvaluationCaseResult[]): EvaluationSummary {
+export function summarizeEvaluationCases(
+	cases: EvaluationCaseResult[],
+	pricing?: SelectorPricing,
+): EvaluationSummary {
 	let correct = 0;
 	let proposals = 0;
 	let correctProposals = 0;
@@ -89,6 +109,12 @@ export function summarizeEvaluationCases(cases: EvaluationCaseResult[]): Evaluat
 	let totalElapsedMilliseconds = 0;
 	let reportedCostTotal = 0;
 	let reportedCostCases = 0;
+	let cacheHits = 0;
+	let cacheMisses = 0;
+	let cacheUnreportedRequests = 0;
+	let coldElapsedMilliseconds = 0;
+	let apiListPriceTotal = 0;
+	let pricedRequests = 0;
 	const usageTotals: Record<string, number> = {};
 
 	for (const result of cases) {
@@ -115,6 +141,22 @@ export function summarizeEvaluationCases(cases: EvaluationCaseResult[]): Evaluat
 			reportedCostTotal += cost;
 			reportedCostCases += 1;
 		}
+		if (result.requestMade) {
+			if (isRecord(result.provenance) && typeof result.provenance.cache_hit === "boolean") {
+				if (result.provenance.cache_hit) cacheHits += 1;
+				else {
+					cacheMisses += 1;
+					coldElapsedMilliseconds += result.elapsedMilliseconds;
+				}
+			} else cacheUnreportedRequests += 1;
+			if (pricing) {
+				const estimated = estimateUsageCost(result.usage, pricing);
+				if (estimated.ok) {
+					apiListPriceTotal += estimated.value.totalUsd;
+					pricedRequests += 1;
+				}
+			}
+		}
 	}
 
 	const errors = cases.filter((result) => result.status === "error").length;
@@ -140,5 +182,22 @@ export function summarizeEvaluationCases(cases: EvaluationCaseResult[]): Evaluat
 		meanElapsedMilliseconds: divide(totalElapsedMilliseconds, cases.length),
 		usageTotals,
 		reportedCostUsd: { total: reportedCostTotal, reportedCases: reportedCostCases },
+		cache: {
+			reportedRequests: cacheHits + cacheMisses,
+			hits: cacheHits,
+			misses: cacheMisses,
+			unreportedRequests: cacheUnreportedRequests,
+			hitRate: divide(cacheHits, cacheHits + cacheMisses),
+			coldElapsedMilliseconds,
+			meanColdElapsedMilliseconds: divide(coldElapsedMilliseconds, cacheMisses),
+		},
+		apiListPriceUsd: pricing
+			? {
+					total: Number(apiListPriceTotal.toFixed(12)),
+					pricedRequests,
+					totalRequests: requestsMade,
+					complete: pricedRequests === requestsMade,
+				}
+			: null,
 	};
 }

@@ -32,7 +32,7 @@ describe("summarizeEvaluationCases", () => {
 				matchProbability: 0.9,
 				candidateCount: 1,
 				omittedCandidateCount: 0,
-				provenance: { provider: "fixture" },
+				provenance: { provider: "fixture", cache_hit: false },
 				usage: { input_tokens: 20, output_tokens: 4, cost_usd: 0.001 },
 			},
 			{
@@ -49,7 +49,7 @@ describe("summarizeEvaluationCases", () => {
 				matchProbability: 0.2,
 				candidateCount: 2,
 				omittedCandidateCount: 0,
-				provenance: { provider: "fixture" },
+				provenance: { provider: "fixture", cache_hit: true },
 				usage: { input_tokens: 25, output_tokens: 3, total_cost_usd: 0.002 },
 			},
 			{
@@ -108,6 +108,16 @@ describe("summarizeEvaluationCases", () => {
 			meanElapsedMilliseconds: 15,
 			usageTotals: { input_tokens: 45, output_tokens: 7, cost_usd: 0.001, total_cost_usd: 0.002 },
 			reportedCostUsd: { total: 0.003, reportedCases: 2 },
+			cache: {
+				reportedRequests: 2,
+				hits: 1,
+				misses: 1,
+				unreportedRequests: 1,
+				hitRate: 0.5,
+				coldElapsedMilliseconds: 10,
+				meanColdElapsedMilliseconds: 10,
+			},
+			apiListPriceUsd: null,
 		});
 	});
 
@@ -139,6 +149,16 @@ describe("summarizeEvaluationCases", () => {
 		expect(summary.pipelineAbstentionRate).toBeNull();
 		expect(summary.providerAbstentionRate).toBeNull();
 		expect(summary.reportedCostUsd).toEqual({ total: 0, reportedCases: 0 });
+		expect(summary.cache).toEqual({
+			reportedRequests: 0,
+			hits: 0,
+			misses: 0,
+			unreportedRequests: 0,
+			hitRate: null,
+			coldElapsedMilliseconds: 0,
+			meanColdElapsedMilliseconds: null,
+		});
+		expect(summary.apiListPriceUsd).toBeNull();
 	});
 
 	it("ignores nonnumeric usage fields instead of treating them as cost", () => {
@@ -164,5 +184,44 @@ describe("summarizeEvaluationCases", () => {
 
 		expect(summary.usageTotals).toEqual({});
 		expect(summary.reportedCostUsd).toEqual({ total: 0, reportedCases: 0 });
+	});
+
+	it("estimates token cost only from an explicit selector rate schedule", () => {
+		const summary = summarizeEvaluationCases(
+			[
+				{
+					caseId: "priced",
+					action: "click",
+					tags: [],
+					expectedRef: "a",
+					actualRef: "a",
+					outcome: "correct-selection",
+					status: "proposed",
+					requestMade: true,
+					requestBytes: 100,
+					elapsedMilliseconds: 4,
+					matchProbability: 0.9,
+					candidateCount: 1,
+					omittedCandidateCount: 0,
+					provenance: { cache_hit: false },
+					usage: { input_tokens: 1_000, output_tokens: 100 },
+				},
+			],
+			{
+				model: "fixture",
+				sourceUrl: "https://example.com/pricing",
+				components: [
+					{ usageField: "input_tokens", usdPerMillion: 0.2 },
+					{ usageField: "output_tokens", usdPerMillion: 1.2 },
+				],
+			},
+		);
+
+		expect(summary.apiListPriceUsd).toEqual({
+			total: 0.00032,
+			pricedRequests: 1,
+			totalRequests: 1,
+			complete: true,
+		});
 	});
 });

@@ -1,6 +1,11 @@
 // pattern: Imperative Shell
 import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
+import {
+	buildCascadeCalibration,
+	type CascadeCalibration,
+	DEFAULT_CASCADE_THRESHOLDS,
+} from "./calibration.js";
 import { collectActionCandidates } from "./candidates.js";
 import {
 	classifyEvaluationOutcome,
@@ -9,6 +14,7 @@ import {
 	summarizeEvaluationCases,
 } from "./evaluation.js";
 import { type EvaluationCorpus, parseEvaluationCorpus } from "./evaluation-corpus.js";
+import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
 import { runShadowSelection } from "./shadow-run.js";
 import type { BrowserObserver, JevEvaluator, Result, SelectionRequest } from "./types.js";
 
@@ -26,12 +32,14 @@ export interface EvaluationSelectorReport {
 }
 
 export interface EvaluationReport {
-	version: 1;
+	version: 2;
 	mode: "shadow-evaluation";
 	executed: false;
 	corpus: { name: string; caseCount: number; sha256: string };
 	requestBudget: { selectors: number; casesPerSelector: number; maximumRequests: number };
+	pricing: EvaluationPricing | null;
 	selectors: EvaluationSelectorReport[];
+	cascade: CascadeCalibration | null;
 }
 
 function invalid(message: string): Result<EvaluationReport> {
@@ -51,7 +59,15 @@ function replayObserver(
 export async function runEvaluationCorpus(
 	corpus: EvaluationCorpus,
 	selectors: EvaluationSelector[],
-	options: { now?: () => number } = {},
+	options: {
+		now?: () => number;
+		pricing?: EvaluationPricing;
+		cascade?: {
+			primarySelector: string;
+			fallbackSelector: string;
+			thresholds?: readonly number[];
+		};
+	} = {},
 ): Promise<Result<EvaluationReport>> {
 	const parsedCorpus = parseEvaluationCorpus(corpus);
 	if (!parsedCorpus.ok) return parsedCorpus;
@@ -68,6 +84,15 @@ export async function runEvaluationCorpus(
 		if (names.has(name)) return invalid(`selector names must be unique: ${name}`);
 		names.add(name);
 	}
+	if (
+		options.cascade &&
+		(!names.has(options.cascade.primarySelector) || !names.has(options.cascade.fallbackSelector))
+	) {
+		return invalid("cascade selectors must name selectors in this evaluation");
+	}
+	const parsedPricing = options.pricing ? parseEvaluationPricing(options.pricing) : null;
+	if (parsedPricing && !parsedPricing.ok) return parsedPricing;
+	const pricing = parsedPricing?.ok ? parsedPricing.value : undefined;
 
 	const now = options.now ?? (() => performance.now());
 	const selectorReports: EvaluationSelectorReport[] = [];
@@ -137,15 +162,33 @@ export async function runEvaluationCorpus(
 		}
 		selectorReports.push({
 			name: selector.name.trim(),
-			summary: summarizeEvaluationCases(caseResults),
+			summary: summarizeEvaluationCases(caseResults, pricing?.selectors[selector.name.trim()]),
 			cases: caseResults,
 		});
+	}
+	let cascade: CascadeCalibration | null = null;
+	if (options.cascade) {
+		const primary = selectorReports.find(
+			(selector) => selector.name === options.cascade?.primarySelector,
+		);
+		const fallback = selectorReports.find(
+			(selector) => selector.name === options.cascade?.fallbackSelector,
+		);
+		if (!primary || !fallback) {
+			return invalid("cascade selectors must name selectors in this evaluation");
+		}
+		const calibrated = buildCascadeCalibration(primary, fallback, {
+			thresholds: options.cascade.thresholds ?? DEFAULT_CASCADE_THRESHOLDS,
+			...(pricing ? { pricing } : {}),
+		});
+		if (!calibrated.ok) return calibrated;
+		cascade = calibrated.value;
 	}
 
 	return {
 		ok: true,
 		value: {
-			version: 1,
+			version: 2,
 			mode: "shadow-evaluation",
 			executed: false,
 			corpus: {
@@ -158,7 +201,9 @@ export async function runEvaluationCorpus(
 				casesPerSelector: validatedCorpus.cases.length,
 				maximumRequests: selectors.length * validatedCorpus.cases.length,
 			},
+			pricing: pricing ?? null,
 			selectors: selectorReports,
+			cascade,
 		},
 	};
 }

@@ -17,7 +17,29 @@ describe("runCli evaluate", () => {
 		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-test-"));
 		temporaryDirectories.push(directory);
 		const clientPath = join(directory, "selector-client.mjs");
+		const pricingPath = join(directory, "pricing.json");
 		const outputPath = join(directory, "missing", "nested", "report.json");
+		await writeFile(
+			pricingPath,
+			JSON.stringify({
+				version: 1,
+				currency: "USD",
+				asOf: "2026-09-18",
+				selectors: {
+					jev: {
+						model: "fixture-jev",
+						sourceUrl: "https://example.com/jev-pricing",
+						components: [{ usageField: "input_tokens", usdPerMillion: 0.042 }],
+					},
+					baseline: {
+						model: "fixture-baseline",
+						sourceUrl: "https://example.com/baseline-pricing",
+						components: [{ usageField: "input_tokens", usdPerMillion: 0.2 }],
+					},
+				},
+			}),
+			{ mode: 0o600 },
+		);
 		await writeFile(
 			clientPath,
 			`import { readFileSync, writeFileSync } from "node:fs";
@@ -32,7 +54,7 @@ if (goal.includes("next page")) choice = request.state.candidates.find((item) =>
 if (goal.includes("product query") || goal.includes("product size")) choice = "c0";
 if (goal.includes("used items")) choice = "c1";
 writeFileSync(args["--output"], JSON.stringify({
-  provenance: { provider: "fixture" },
+  provenance: { provider: "fixture", cache_hit: false },
   usage: { input_tokens: 10, cost_usd: 0.0001 },
   answers: { next_element: { choice }, unambiguous_match: { noul: choice === "none" ? 0.2 : 0.9 } }
 }));
@@ -48,6 +70,8 @@ writeFileSync(args["--output"], JSON.stringify({
 			clientPath,
 			"--baseline-client",
 			clientPath,
+			"--pricing",
+			pricingPath,
 			"--output",
 			outputPath,
 		]);
@@ -55,6 +79,8 @@ writeFileSync(args["--output"], JSON.stringify({
 		expect(code).toBe(0);
 		const report = JSON.parse(await readFile(outputPath, "utf8")) as EvaluationReport;
 		expect(report.executed).toBe(false);
+		expect(report.version).toBe(2);
+		expect(report.pricing?.asOf).toBe("2026-09-18");
 		expect(report.requestBudget).toEqual({
 			selectors: 2,
 			casesPerSelector: 6,
@@ -62,5 +88,12 @@ writeFileSync(args["--output"], JSON.stringify({
 		});
 		expect(report.selectors.map((selector) => selector.summary.correct)).toEqual([6, 6]);
 		expect(report.selectors.map((selector) => selector.summary.requestsMade)).toEqual([5, 5]);
+		expect(report.selectors.map((selector) => selector.summary.cache.misses)).toEqual([5, 5]);
+		expect(report.selectors.map((selector) => selector.summary.apiListPriceUsd?.complete)).toEqual([
+			true,
+			true,
+		]);
+		expect(report.cascade?.operatingPoints).toHaveLength(21);
+		expect(report.cascade?.operatingPoints[8]?.threshold).toBe(0.4);
 	});
 });

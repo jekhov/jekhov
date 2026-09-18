@@ -72,17 +72,18 @@ choice question and one probability question.
 
 ## Private evaluation
 
-The repository includes a first synthetic corpus at `corpora/synthetic-v1.json`. Corpus contents and
-provider results are private working material: they are excluded from the npm package and must not
-be published without review.
+The repository includes synthetic smoke and calibration corpora at `corpora/synthetic-v1.json` and
+`corpora/synthetic-v2.json`. Corpus contents and provider results are private working material: they
+are excluded from the npm package and must not be published without review.
 
 Compare Jev with a general-model selector wrapper that implements the same file-based protocol:
 
 ```sh
 node dist/cli.js evaluate \
-  --corpus corpora/synthetic-v1.json \
+  --corpus corpora/synthetic-v2.json \
   --baseline-client dist/codex-baseline-client.js \
-  --output reports/synthetic-v1.json
+  --pricing config/evaluation-pricing-2026-09-18.json \
+  --output reports/synthetic-v2.json
 ```
 
 Use `--jev-client` to override the default policy-enforcing Jev wrapper. Both wrapper paths receive
@@ -90,10 +91,17 @@ one bounded selection request at a time. Evaluation runs sequentially and makes 
 per selector per case. It replays observations without launching a browser and always reports
 `executed: false`.
 
-The report separates explicit provider abstention from deterministic no-candidate cases. It records
-correctness, proposal precision, abstention rates, request bytes, elapsed time, numeric usage fields,
-and wrapper-reported USD cost. Missing cost stays missing; Jekhov does not estimate it from token
-counts. This selector comparison is not yet a full general-model Playwright-agent baseline.
+The version 2 report separates explicit provider abstention from deterministic no-candidate cases.
+It records correctness, proposal precision, abstention rates, request bytes, cache-separated elapsed
+time, numeric usage fields, and wrapper-reported USD cost. When `--pricing` supplies an explicit
+dated rate snapshot, the report also records API list-price estimates and whether every request was
+priceable. These estimates are not invoices and do not imply that local cache hits incurred charges.
+
+The same report simulates a Jev-first cascade at thresholds from 0 through 1 in 0.05 increments.
+Primary errors, explicit abstentions, and proposals below each threshold use the recorded baseline
+answer. Operating points include final accuracy, proposal precision, fallback rate, usage, latency,
+cost, and action-specific results. This remains offline shadow analysis and does not set an action
+threshold. The selector comparison is not yet a full general-model Playwright-agent baseline.
 
 The repo-owned baseline requires a logged-in Codex CLI. It pins `gpt-5.6-luna` at low reasoning
 effort, runs ephemerally in a read-only sandbox, ignores user/project configuration, removes API-key

@@ -11,13 +11,14 @@ import { runInspection } from "./inspection.js";
 import { createJevCliEvaluator, createSelectionCliEvaluator } from "./jev-cli-evaluator.js";
 import { createPlaywrightObserver } from "./playwright-observer.js";
 import { parseShadowPlan } from "./policy.js";
+import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
 import { runShadowSelection } from "./shadow-run.js";
 import type { Failure, Result } from "./types.js";
 
 const USAGE = `Usage:
   jekhov inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
   jekhov shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
-  jekhov evaluate --corpus CORPUS.json --baseline-client PATH [--jev-client PATH] [--output REPORT.json]
+  jekhov evaluate --corpus CORPUS.json --baseline-client PATH [--jev-client PATH] [--pricing RATES.json] [--output REPORT.json]
 
 inspect costs no Jev request. shadow proposes an element but never acts.
 evaluate replays a private corpus through Jev and baseline wrappers; it never opens a browser or acts.`;
@@ -112,23 +113,42 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		if (!loadedCorpus.ok) return reportFailure(loadedCorpus.error);
 		const corpus = parseEvaluationCorpus(loadedCorpus.value);
 		if (!corpus.ok) return reportFailure(corpus.error);
-		const result = await runEvaluationCorpus(corpus.value, [
+		let pricing: EvaluationPricing | undefined;
+		if (parsedArgs.value.pricingPath) {
+			const loadedPricing = await readJson(parsedArgs.value.pricingPath, {
+				failureCode: "pricing-read-failed",
+			});
+			if (!loadedPricing.ok) return reportFailure(loadedPricing.error);
+			const parsedPricing = parseEvaluationPricing(loadedPricing.value);
+			if (!parsedPricing.ok) return reportFailure(parsedPricing.error);
+			pricing = parsedPricing.value;
+		}
+		const result = await runEvaluationCorpus(
+			corpus.value,
+			[
+				{
+					name: "jev",
+					evaluator: createJevCliEvaluator({
+						clientPath:
+							parsedArgs.value.jevClientPath ??
+							process.env.JEV_CLIENT_PATH ??
+							defaultJevClientPath(),
+					}),
+				},
+				{
+					name: "baseline",
+					evaluator: createSelectionCliEvaluator({
+						clientPath: parsedArgs.value.baselineClientPath,
+						failureCode: "baseline-client-failed",
+						timeoutMs: BASELINE_WRAPPER_TIMEOUT_MS,
+					}),
+				},
+			],
 			{
-				name: "jev",
-				evaluator: createJevCliEvaluator({
-					clientPath:
-						parsedArgs.value.jevClientPath ?? process.env.JEV_CLIENT_PATH ?? defaultJevClientPath(),
-				}),
+				...(pricing ? { pricing } : {}),
+				cascade: { primarySelector: "jev", fallbackSelector: "baseline" },
 			},
-			{
-				name: "baseline",
-				evaluator: createSelectionCliEvaluator({
-					clientPath: parsedArgs.value.baselineClientPath,
-					failureCode: "baseline-client-failed",
-					timeoutMs: BASELINE_WRAPPER_TIMEOUT_MS,
-				}),
-			},
-		]);
+		);
 		if (!result.ok) return reportFailure(result.error);
 		return emitResult(result.value, parsedArgs.value.outputPath);
 	}

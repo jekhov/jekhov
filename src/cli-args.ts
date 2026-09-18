@@ -9,6 +9,7 @@ export type CliOptions =
 			baselineClientPath: string;
 			outputPath?: string;
 			jevClientPath?: string;
+			pricingPath?: string;
 	  }
 	| {
 			command: "inspect" | "shadow";
@@ -32,7 +33,7 @@ export function parseCliArgs(argv: string[]): Result<CliOptions> {
 	const values: Record<string, string> = {};
 	const allowed = new Set(
 		command === "evaluate"
-			? ["--baseline-client", "--corpus", "--jev-client", "--output"]
+			? ["--baseline-client", "--corpus", "--jev-client", "--output", "--pricing"]
 			: ["--chromium", "--jev-client", "--output", "--plan"],
 	);
 	for (let index = 1; index < argv.length; index += 2) {
@@ -52,6 +53,7 @@ export function parseCliArgs(argv: string[]): Result<CliOptions> {
 				corpusPath: values["--corpus"],
 				baselineClientPath: values["--baseline-client"],
 				...(values["--jev-client"] ? { jevClientPath: values["--jev-client"] } : {}),
+				...(values["--pricing"] ? { pricingPath: values["--pricing"] } : {}),
 				...(values["--output"] ? { outputPath: values["--output"] } : {}),
 			},
 		};

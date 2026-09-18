@@ -132,3 +132,33 @@ Not: a full browser agent operating on a raw page observation.
 
 Invariant: the baseline may choose a candidate or abstain but cannot browse, call tools, modify the
 candidate set, or execute a browser action.
+
+## Selector cascade
+
+An offline composition that accepts a primary selector proposal only when its match probability
+meets a tested threshold, otherwise substituting the result of a recorded fallback selector.
+
+Not: an action gate or a second live provider call in the current runner.
+
+Invariant: primary errors and explicit abstentions always route to the fallback; the report retains
+the calls, usage, latency, and final labeled outcome for both legs.
+
+## Calibration operating point
+
+The measured accuracy, proposal precision, fallback rate, usage, latency, and cost estimate produced
+by replaying one declared threshold over a labeled selector comparison.
+
+Not: a production threshold selected from a smoke test.
+
+Invariant: operating points remain descriptive until the intended action class has enough labeled
+cases and a declared precision target.
+
+## API list-price estimate
+
+A deterministic translation of recorded numeric usage through an explicit dated USD rate snapshot.
+
+Not: an invoice, provider-reported cost, or a claim that a locally cached request incurred API
+charges.
+
+Invariant: the report identifies the rate date, model, source URL, token components, and whether
+every recorded request had enough usage data to price.

@@ -92,18 +92,22 @@ describe("runEvaluationCorpus", () => {
 					evaluator: evaluator({ Continue: "none", Save: "c0" }, calls, requests),
 				},
 			],
-			{ now: () => (time += 5) },
+			{
+				now: () => (time += 5),
+				cascade: { primarySelector: "jev", fallbackSelector: "baseline", thresholds: [0.5] },
+			},
 		);
 
 		expect(result.ok).toBe(true);
 		if (!result.ok) throw new Error("evaluation should succeed");
 		expect(calls).toEqual(["Continue", "Save", "Continue", "Save"]);
 		expect(result.value).toMatchObject({
-			version: 1,
+			version: 2,
 			mode: "shadow-evaluation",
 			executed: false,
 			corpus: { name: "two-cases", caseCount: 2 },
 			requestBudget: { selectors: 2, casesPerSelector: 2, maximumRequests: 4 },
+			pricing: null,
 		});
 		expect(result.value.corpus.sha256).toMatch(/^[a-f0-9]{64}$/);
 		expect(result.value.selectors[0]?.summary).toMatchObject({
@@ -115,6 +119,18 @@ describe("runEvaluationCorpus", () => {
 			correct: 0,
 			incorrect: 2,
 			requestsMade: 2,
+		});
+		expect(result.value.cascade).toMatchObject({
+			primarySelector: "jev",
+			fallbackSelector: "baseline",
+			operatingPoints: [
+				{
+					threshold: 0.5,
+					outcomes: { correct: 1, totalCases: 2 },
+					routing: { primaryRequests: 2, fallbackRequests: 1, fallbackRate: 0.5 },
+					apiListPriceUsd: null,
+				},
+			],
 		});
 		expect(result.value.selectors[0]?.cases[0]).toMatchObject({
 			action: "click",
@@ -134,6 +150,23 @@ describe("runEvaluationCorpus", () => {
 		expect(requests[1]).toBe(requests[3]);
 		expect(requests.join("\n")).not.toContain("continue-ref");
 		expect(requests.join("\n")).not.toContain("save-one");
+	});
+
+	it("rejects cascade selector names that are absent from the run", async () => {
+		const unused: JevEvaluator = { evaluate: vi.fn() };
+
+		const result = await runEvaluationCorpus(corpus, [{ name: "jev", evaluator: unused }], {
+			cascade: { primarySelector: "jev", fallbackSelector: "missing" },
+		});
+
+		expect(result).toEqual({
+			ok: false,
+			error: {
+				code: "invalid-evaluation",
+				message: "cascade selectors must name selectors in this evaluation",
+			},
+		});
+		expect(unused.evaluate).not.toHaveBeenCalled();
 	});
 
 	it("records selector failures and continues through the corpus", async () => {

@@ -55,6 +55,8 @@ describe("parseCliArgs", () => {
 				"jev-client.mjs",
 				"--baseline-client",
 				"baseline-client.mjs",
+				"--pricing",
+				"config/evaluation-pricing.json",
 				"--output",
 				"reports/comparison.json",
 			]),
@@ -65,6 +67,7 @@ describe("parseCliArgs", () => {
 				corpusPath: "corpora/synthetic-v1.json",
 				jevClientPath: "jev-client.mjs",
 				baselineClientPath: "baseline-client.mjs",
+				pricingPath: "config/evaluation-pricing.json",
 				outputPath: "reports/comparison.json",
 			},
 		});

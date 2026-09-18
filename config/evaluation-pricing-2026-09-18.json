@@ -1,0 +1,29 @@
+{
+	"version": 1,
+	"currency": "USD",
+	"asOf": "2026-09-18",
+	"selectors": {
+		"jev": {
+			"model": "jev-1.13.0",
+			"sourceUrl": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+			"components": [
+				{ "usageField": "input_tokens", "usdPerMillion": 0.042 },
+				{ "usageField": "output_tokens", "usdPerMillion": 0 }
+			]
+		},
+		"baseline": {
+			"model": "gpt-5.6-luna",
+			"sourceUrl": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+			"components": [
+				{
+					"usageField": "input_tokens",
+					"usdPerMillion": 0.2,
+					"subtractUsageFields": ["cached_input_tokens", "cache_write_input_tokens"]
+				},
+				{ "usageField": "cached_input_tokens", "usdPerMillion": 0.02 },
+				{ "usageField": "cache_write_input_tokens", "usdPerMillion": 0.25 },
+				{ "usageField": "output_tokens", "usdPerMillion": 1.2 }
+			]
+		}
+	}
+}

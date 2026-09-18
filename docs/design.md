@@ -71,10 +71,17 @@ Selectors run sequentially in corpus order. The request budget is fixed before t
 no selector request. Wrapper failures remain case-level errors so one outage does not silently
 remove the rest of a comparison.
 
-Reports include per-case outcomes and aggregate accuracy, proposal precision, provider abstention,
-pipeline abstention, request bytes, latency, numeric usage fields, and wrapper-reported USD cost.
-Each report hashes the normalized corpus, including its labels. The harness does not infer cost from
-tokens and does not set an action threshold.
+Version 2 reports include per-case outcomes and aggregate accuracy, proposal precision, provider
+abstention, pipeline abstention, request bytes, cache-separated latency, numeric usage fields, and
+wrapper-reported USD cost. Each report hashes the normalized corpus, including its labels. An
+optional dated pricing file can translate usage into an API list-price estimate; this remains
+separate from provider-reported cost and records whether every request was priceable.
+
+The report also simulates a Jev-first cascade over a deterministic 0.05 threshold grid. Primary
+errors, explicit abstentions, and proposals below the tested match-probability threshold use the
+recorded general-model result. Each operating point reports final correctness, proposal precision,
+fallback rate, resource totals, estimated list-price cost, and per-action results. This is offline
+analysis only: it neither chooses a production threshold nor adds an action path.
 
 The repo-owned general-model baseline sees the same bounded selection request as Jev. It runs
 `gpt-5.6-luna` at low reasoning effort through ephemeral, read-only `codex exec`, ignores user and
