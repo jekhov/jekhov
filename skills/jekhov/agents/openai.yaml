@@ -1,0 +1,4 @@
+interface:
+  display_name: "Jekhov"
+  short_description: "Bounded shadow-mode Playwright element selection"
+  default_prompt: "Use $jekhov to inspect this permitted public or synthetic page and propose one element for a preplanned Playwright action without acting."

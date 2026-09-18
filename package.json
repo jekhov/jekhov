@@ -1,5 +1,5 @@
 {
-	"name": "jev-playwright",
+	"name": "jekhov",
 	"version": "0.0.0",
 	"description": "Bounded Jev element selection for standard Playwright, starting in shadow mode.",
 	"private": true,
@@ -8,7 +8,7 @@
 		"node": ">=22"
 	},
 	"bin": {
-		"jev-playwright": "./dist/cli.js"
+		"jekhov": "./dist/cli.js"
 	},
 	"exports": {
 		".": {

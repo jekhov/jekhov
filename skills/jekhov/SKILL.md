@@ -1,9 +1,9 @@
 ---
-name: jev-playwright
+name: jekhov
 description: Use standard Playwright plus a policy-enforcing Jev wrapper to inspect a permitted public or synthetic page and make a bounded, shadow-only element selection. Use when evaluating whether Jev can reduce the cost of LLM browser driving, building a labeled browser-selection corpus, or proposing the next element for a preplanned Playwright action. Do not use for private or unknown-class data, autonomous actions, scraping-prohibited sources, bot-control bypass, or open-ended browser planning.
 ---
 
-# Jev Playwright
+# Jekhov
 
 Use this skill to evaluate bounded browser element selection without acting on the page.
 

@@ -44,7 +44,7 @@ export function createJevCliEvaluator(options: {
 }): JevEvaluator {
 	return {
 		async evaluate(request, dataClass) {
-			const directory = await mkdtemp(join(tmpdir(), "jev-playwright-"));
+			const directory = await mkdtemp(join(tmpdir(), "jekhov-"));
 			const requestPath = join(directory, "request.json");
 			const responsePath = join(directory, "response.json");
 			try {

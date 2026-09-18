@@ -1,4 +1,4 @@
-# Project instructions
+# Jekhov project instructions
 
 Follow the parent workspace instructions.
 

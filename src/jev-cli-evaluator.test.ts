@@ -13,7 +13,7 @@ afterEach(async () => {
 });
 
 async function fakeClient(source: string): Promise<string> {
-	const directory = await mkdtemp(join(tmpdir(), "jev-playwright-test-"));
+	const directory = await mkdtemp(join(tmpdir(), "jekhov-test-"));
 	temporaryDirectories.push(directory);
 	const path = join(directory, "fake-client.mjs");
 	await writeFile(path, source, { mode: 0o700 });

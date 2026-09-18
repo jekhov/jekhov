@@ -1,4 +1,4 @@
-# jev-playwright
+# Jekhov
 
 Bounded [Jev](https://github.com/typesafe-ai/jev) element selection for standard
 [Playwright](https://playwright.dev/), with deterministic policy checks around it.

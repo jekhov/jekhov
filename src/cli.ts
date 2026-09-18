@@ -13,8 +13,8 @@ import { runShadowSelection } from "./shadow-run.js";
 import type { Failure, Result } from "./types.js";
 
 const USAGE = `Usage:
-  jev-playwright inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
-  jev-playwright shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
+  jekhov inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
+  jekhov shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
 
 inspect costs no Jev request. shadow proposes an element but never acts.`;
 
@@ -39,7 +39,7 @@ async function emit(value: unknown, outputPath?: string): Promise<void> {
 }
 
 function reportFailure(failure: Failure): number {
-	process.stderr.write(`jev-playwright: ${failure.code}: ${failure.message}\n`);
+	process.stderr.write(`jekhov: ${failure.code}: ${failure.message}\n`);
 	return 1;
 }
 
