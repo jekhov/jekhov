@@ -9,7 +9,7 @@ export type {
 	CascadeRoutingSummary,
 } from "./calibration.js";
 export { buildCascadeCalibration, DEFAULT_CASCADE_THRESHOLDS } from "./calibration.js";
-export { collectActionCandidates } from "./candidates.js";
+export { collectActionCandidates, MAX_SNAPSHOT_ENTRIES } from "./candidates.js";
 export { createThresholdCascadeEvaluator } from "./cascade-evaluator.js";
 export type {
 	EvaluationCaseResult,
@@ -70,15 +70,33 @@ export type {
 	BrowserAction,
 	BrowserObserver,
 	CandidateSet,
+	ChoiceOnlySelectionRequest,
+	ChoiceQuestion,
+	ChoiceWithAmbiguitySelectionRequest,
 	DataClass,
+	Failure,
 	JevEvaluator,
 	MatchProbabilitySource,
+	NoulQuestion,
 	PageObservation,
 	ParsedSelection,
 	Result,
 	SelectionProfile,
 	SelectionRequest,
+	SelectionState,
 	ShadowPlan,
 	ShadowReport,
+	ShadowStep,
 	SourcePolicy,
+	SourcePolicyBasis,
 } from "./types.js";
+export type {
+	CorpusValidationSummary,
+	PricingValidationSummary,
+	ShadowPlanValidationSummary,
+	SyntheticTaskPlanValidationSummary,
+	ValidationArtifactKind,
+	ValidationArtifactSummary,
+	ValidationReport,
+} from "./validation.js";
+export { validateArtifact } from "./validation.js";

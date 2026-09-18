@@ -1,13 +1,15 @@
 // pattern: Imperative Shell
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readBoundedJson, writePrivateJson } from "./private-json-file.js";
 import type { DataClass, JevEvaluator, Result } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_ERROR_CHARS = 4_000;
+const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 function runClient(
 	clientPath: string,
@@ -51,7 +53,7 @@ export function createSelectionCliEvaluator(options: {
 			const requestPath = join(directory, "request.json");
 			const responsePath = join(directory, "response.json");
 			try {
-				await writeFile(requestPath, `${JSON.stringify(request, null, 2)}\n`, { mode: 0o600 });
+				await writePrivateJson(requestPath, request);
 				const ran = await runClient(
 					resolve(options.clientPath),
 					requestPath,
@@ -62,7 +64,10 @@ export function createSelectionCliEvaluator(options: {
 				);
 				if (!ran.ok) return ran;
 				try {
-					return { ok: true, value: JSON.parse(await readFile(responsePath, "utf8")) };
+					return {
+						ok: true,
+						value: await readBoundedJson(responsePath, MAX_RESPONSE_BYTES, "selector response"),
+					};
 				} catch (error) {
 					return {
 						ok: false,

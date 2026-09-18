@@ -2,7 +2,7 @@
 // pattern: Imperative Shell
 import { execFile } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,14 +11,17 @@ import {
 	buildCodexBaselinePrompt,
 	CODEX_BASELINE_MODEL,
 	CODEX_BASELINE_REASONING_EFFORT,
+	CODEX_BASELINE_REQUEST_LIMIT,
 	parseCodexBaselineAnswer,
 	parseCodexBaselineRequest,
 	parseCodexJsonEvents,
 } from "./codex-baseline.js";
+import { readBoundedJson, writePrivateJson } from "./private-json-file.js";
 import type { Failure, Result } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_BUFFER_BYTES = 4 * 1024 * 1024;
+const MAX_ANSWER_BYTES = 64 * 1024;
 const DISABLED_CODEX_FEATURES = [
 	"apps",
 	"browser_use",
@@ -166,11 +169,13 @@ export async function runCodexBaselineClient(
 	const parsedArgs = parseArgs(argv);
 	if (!parsedArgs.ok) return reportFailure(parsedArgs.error);
 
-	let rawRequest: string;
 	let input: unknown;
 	try {
-		rawRequest = await readFile(parsedArgs.value.inputPath, "utf8");
-		input = JSON.parse(rawRequest);
+		input = await readBoundedJson(
+			parsedArgs.value.inputPath,
+			CODEX_BASELINE_REQUEST_LIMIT,
+			"baseline request",
+		);
 	} catch (error) {
 		return reportFailure({
 			code: "codex-baseline-input-failed",
@@ -184,11 +189,7 @@ export async function runCodexBaselineClient(
 	const schemaPath = join(directory, "answer-schema.json");
 	const answerPath = join(directory, "answer.json");
 	try {
-		await writeFile(
-			schemaPath,
-			`${JSON.stringify(buildCodexBaselineOutputSchema(request.value), null, 2)}\n`,
-			{ mode: 0o600 },
-		);
+		await writePrivateJson(schemaPath, buildCodexBaselineOutputSchema(request.value));
 		const ran = await runCodex({
 			codexPath: options.codexPath ?? process.env.JEKHOV_CODEX_BIN ?? "codex",
 			directory,
@@ -207,11 +208,9 @@ export async function runCodexBaselineClient(
 			});
 		}
 
-		let rawAnswer: string;
 		let answerInput: unknown;
 		try {
-			rawAnswer = await readFile(answerPath, "utf8");
-			answerInput = JSON.parse(rawAnswer);
+			answerInput = await readBoundedJson(answerPath, MAX_ANSWER_BYTES, "Codex answer");
 		} catch (error) {
 			return reportFailure({
 				code: "codex-baseline-output-failed",
@@ -236,9 +235,7 @@ export async function runCodexBaselineClient(
 				unambiguous_match: { noul: answer.value.unambiguousProbability },
 			},
 		};
-		await writeFile(parsedArgs.value.outputPath, `${JSON.stringify(response, null, 2)}\n`, {
-			mode: 0o600,
-		});
+		await writePrivateJson(parsedArgs.value.outputPath, response);
 		return 0;
 	} finally {
 		await rm(directory, { recursive: true }).catch(() => undefined);

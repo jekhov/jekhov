@@ -50,6 +50,15 @@ Not: shadow mode; inspect mode does not run the live Jev decision path.
 
 Invariant: `executed` is `false` and provider usage is zero.
 
+## Artifact validation
+
+The parse-only check for one shadow plan, synthetic task plan, evaluation corpus, or pricing file.
+
+Not: inspect mode, shadow mode, source access, or evidence that a selector is calibrated.
+
+Invariant: no browser opens, no provider request occurs, and the report contains only structural
+summary fields rather than page observations, labels, or pricing details.
+
 ## Selection request
 
 The bounded Jev input containing the step goal, intended browser action, minimized page metadata,

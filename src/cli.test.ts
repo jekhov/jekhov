@@ -4,10 +4,11 @@ import { chmod, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "./cli.js";
 import type { EvaluationReport } from "./evaluation-run.js";
 import type { SyntheticTaskReport } from "./synthetic-task-run.js";
+import type { ValidationReport } from "./validation.js";
 
 const temporaryDirectories: string[] = [];
 const managedChromium = chromium.executablePath();
@@ -22,6 +23,58 @@ const browserAvailable = executablePath !== undefined || existsSync(managedChrom
 
 afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })));
+});
+
+describe("runCli metadata and validation", () => {
+	it("prints the package version", async () => {
+		const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+		try {
+			expect(await runCli(["--version"])).toBe(0);
+			expect(output).toHaveBeenCalledWith("0.1.1\n");
+		} finally {
+			output.mockRestore();
+		}
+	});
+
+	it("validates a plan without opening a browser or calling a provider", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-validate-"));
+		temporaryDirectories.push(directory);
+		const outputPath = join(directory, "validation.json");
+
+		const code = await runCli([
+			"validate",
+			"--plan",
+			resolve("examples/synthetic-plan.json"),
+			"--output",
+			outputPath,
+		]);
+
+		expect(code).toBe(0);
+		const report = JSON.parse(await readFile(outputPath, "utf8")) as ValidationReport;
+		expect(report).toMatchObject({
+			mode: "validation",
+			valid: true,
+			executed: false,
+			browserOpened: false,
+			providerRequestCount: 0,
+			artifact: { kind: "shadow-plan" },
+		});
+		expect((await stat(outputPath)).mode & 0o777).toBe(0o600);
+	});
+
+	it("rejects an oversized plan before parsing it", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-oversized-"));
+		temporaryDirectories.push(directory);
+		const planPath = join(directory, "plan.json");
+		await writeFile(planPath, " ".repeat(2 * 1024 * 1024));
+		const errors = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+		try {
+			expect(await runCli(["validate", "--plan", planPath])).toBe(1);
+			expect(errors).toHaveBeenCalledWith(expect.stringContaining("jekhov: plan-too-large:"));
+		} finally {
+			errors.mockRestore();
+		}
+	});
 });
 
 describe("runCli evaluate", () => {

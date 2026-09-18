@@ -29,6 +29,10 @@ bounded Jev call rather than another full-model page interpretation. The public 
 one shadow step. The separate synthetic harness implements a bounded multi-step loop behind withheld
 labels so selection and execution failures remain distinguishable.
 
+The separate artifact-validation path parses one plan, evaluation corpus, or pricing file and emits
+a content-minimized summary. It opens no browser, makes no provider request, and never executes an
+action. This preflight is deliberately distinct from inspect mode and shadow mode.
+
 ## Deliberate constraints
 
 1. The plan fixes the operation. Jev selects only the element in v0.
@@ -41,6 +45,10 @@ labels so selection and execution failures remain distinguishable.
    matches the fixture's withheld label and the selector proposes it.
 7. The browser adapter uses Playwright's public `ariaSnapshotJSON()` API. Element references remain
    local and never enter the Jev request.
+8. JSON inputs are size-bounded before parsing. Durable JSON outputs use atomic replacement and
+   private file permissions.
+9. Accessibility snapshot traversal has a fixed entry budget and terminates safely for cyclic
+   library input.
 
 ## Synthetic complete-task slice
 

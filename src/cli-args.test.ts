@@ -3,6 +3,50 @@ import { describe, expect, it } from "vitest";
 import { parseCliArgs } from "./cli-args.js";
 
 describe("parseCliArgs", () => {
+	it("supports version output", () => {
+		expect(parseCliArgs(["--version"])).toEqual({ ok: true, value: { command: "version" } });
+		expect(parseCliArgs(["-v"])).toEqual({ ok: true, value: { command: "version" } });
+	});
+
+	it.each([
+		["--plan", "plan.json", "planPath"],
+		["--corpus", "corpus.json", "corpusPath"],
+		["--pricing", "pricing.json", "pricingPath"],
+	] as const)("parses validation for %s", (flag, path, key) => {
+		expect(parseCliArgs(["validate", flag, path, "--output", "validation.json"])).toEqual({
+			ok: true,
+			value: {
+				command: "validate",
+				[key]: path,
+				outputPath: "validation.json",
+			},
+		});
+	});
+
+	it("requires exactly one validation input", () => {
+		expect(parseCliArgs(["validate"])).toEqual({
+			ok: false,
+			error: {
+				code: "invalid-cli",
+				message: "validate requires exactly one of --plan, --corpus, or --pricing",
+			},
+		});
+		expect(parseCliArgs(["validate", "--plan", "plan.json", "--corpus", "corpus.json"])).toEqual({
+			ok: false,
+			error: {
+				code: "invalid-cli",
+				message: "validate requires exactly one of --plan, --corpus, or --pricing",
+			},
+		});
+	});
+
+	it("rejects duplicate flags instead of silently replacing a value", () => {
+		expect(parseCliArgs(["inspect", "--plan", "first.json", "--plan", "second.json"])).toEqual({
+			ok: false,
+			error: { code: "invalid-cli", message: "duplicate argument: --plan" },
+		});
+	});
+
 	it("parses the bundled synthetic demo", () => {
 		expect(
 			parseCliArgs(["demo", "--jev-client", "client.mjs", "--chromium", "/usr/bin/chromium"]),
@@ -252,7 +296,7 @@ describe("parseCliArgs", () => {
 			ok: false,
 			error: {
 				code: "invalid-cli",
-				message: "command must be demo, evaluate, inspect, miniwob, shadow, or task",
+				message: "command must be demo, evaluate, inspect, miniwob, shadow, task, or validate",
 			},
 		});
 	});
@@ -269,7 +313,7 @@ describe("parseCliArgs", () => {
 			ok: false,
 			error: {
 				code: "invalid-cli",
-				message: "command must be demo, evaluate, inspect, miniwob, shadow, or task",
+				message: "command must be demo, evaluate, inspect, miniwob, shadow, task, or validate",
 			},
 		});
 		expect(parseCliArgs(["inspect", "--plan", "plan.json", "--click"])).toEqual({

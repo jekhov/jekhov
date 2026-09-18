@@ -96,4 +96,20 @@ writeFileSync(process.argv[outputIndex], "not-json");
 		if (result.ok) throw new Error("invalid output unexpectedly parsed");
 		expect(result.error.code).toBe("invalid-jev-output");
 	});
+
+	it("bounds wrapper output before parsing it", async () => {
+		const clientPath = await fakeClient(`
+import { writeFileSync } from "node:fs";
+const outputIndex = process.argv.indexOf("--output") + 1;
+writeFileSync(process.argv[outputIndex], " ".repeat(2 * 1024 * 1024));
+`);
+		const evaluator = createJevCliEvaluator({ clientPath });
+		const result = await evaluator.evaluate(request, "synthetic");
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("oversized output unexpectedly parsed");
+		expect(result.error).toEqual({
+			code: "invalid-jev-output",
+			message: "selector response exceeds 1048576 bytes",
+		});
+	});
 });

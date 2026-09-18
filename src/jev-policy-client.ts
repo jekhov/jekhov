@@ -2,9 +2,8 @@
 // pattern: Imperative Shell
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { TypeSafeClient } from "@typesafe-ai/sdk";
 import {
@@ -13,6 +12,7 @@ import {
 	validateJevPolicyRequest,
 	validateJevPolicyResponse,
 } from "./jev-policy.js";
+import { readBoundedJson, writePrivateJson } from "./private-json-file.js";
 
 interface ClientArgs {
 	dataClass: string | undefined;
@@ -24,6 +24,7 @@ interface ClientArgs {
 
 const USAGE =
 	"Usage: jekhov-jev-client --data-class public|synthetic --input REQUEST.json [--output RESPONSE.json] [--dry-run]";
+const MAX_JEV_RESPONSE_BYTES = 1024 * 1024;
 
 function parseArgs(argv: string[]): ClientArgs {
 	const parsed: ClientArgs = {
@@ -49,15 +50,8 @@ function hashJson(value: unknown): string {
 	return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-async function writePrivate(path: string, value: unknown): Promise<void> {
-	const absolute = resolve(path);
-	await mkdir(dirname(absolute), { recursive: true, mode: 0o700 });
-	await writeFile(absolute, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
-	await chmod(absolute, 0o600);
-}
-
 async function emit(value: unknown, outputPath?: string): Promise<void> {
-	if (outputPath) await writePrivate(outputPath, value);
+	if (outputPath) await writePrivateJson(outputPath, value);
 	else process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
@@ -68,7 +62,7 @@ function cacheDirectory(): string {
 
 async function readCached(path: string): Promise<unknown | undefined> {
 	try {
-		return JSON.parse(await readFile(path, "utf8"));
+		return await readBoundedJson(path, MAX_JEV_RESPONSE_BYTES, "cached Jev response");
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
 		throw error;
@@ -82,11 +76,7 @@ export async function runJevPolicyClient(argv = process.argv.slice(2)): Promise<
 		return 0;
 	}
 	if (!args.inputPath || !args.dataClass) throw new Error(USAGE);
-	const inputText = await readFile(resolve(args.inputPath), "utf8");
-	if (Buffer.byteLength(inputText, "utf8") > MAX_JEV_REQUEST_BYTES) {
-		throw new Error(`input exceeds the ${MAX_JEV_REQUEST_BYTES}-byte local ceiling`);
-	}
-	const input: unknown = JSON.parse(inputText);
+	const input = await readBoundedJson(args.inputPath, MAX_JEV_REQUEST_BYTES, "input");
 	const request = validateJevPolicyRequest(input, args.dataClass);
 	if (!request.ok) throw new Error(request.error.message);
 	const requestHash = hashJson(request.value);
@@ -125,7 +115,7 @@ export async function runJevPolicyClient(argv = process.argv.slice(2)): Promise<
 		elapsedMs = Math.round(performance.now() - started);
 		const checked = validateJevPolicyResponse(payload, request.value.questions);
 		if (!checked.ok) throw new Error(checked.error.message);
-		await writePrivate(cachePath, checked.value);
+		await writePrivateJson(cachePath, checked.value);
 	}
 	const checked = validateJevPolicyResponse(payload, request.value.questions);
 	if (!checked.ok) throw new Error(checked.error.message);

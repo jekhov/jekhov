@@ -8,6 +8,9 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const directory = await mkdtemp(join(tmpdir(), "jekhov-package-smoke-"));
 const npmEnvironment = { ...process.env, npm_config_dry_run: "false" };
+const packageMetadata = JSON.parse(
+	await readFile(new URL("../package.json", import.meta.url), "utf8"),
+);
 try {
 	const { stdout } = await execFileAsync(
 		"npm",
@@ -21,6 +24,7 @@ try {
 		"dist/cli.js",
 		"dist/index.d.ts",
 		"dist/jev-policy-client.js",
+		"dist/validation.js",
 		"examples/synthetic-plan.json",
 		"examples/synthetic-task.json",
 		"corpora/synthetic-v1.json",
@@ -51,6 +55,26 @@ try {
 	if (!cli.stdout.includes("jekhov demo") || !cli.stdout.includes("jekhov miniwob run")) {
 		throw new Error("installed jekhov bin did not expose the expected commands");
 	}
+	const version = await execFileAsync(join(binDirectory, "jekhov"), ["--version"]);
+	if (version.stdout.trim() !== packageMetadata.version) {
+		throw new Error("installed jekhov bin version drifted from package.json");
+	}
+	const validationReportPath = join(installDirectory, "validation-report.json");
+	await execFileAsync(join(binDirectory, "jekhov"), [
+		"validate",
+		"--plan",
+		join(installDirectory, "node_modules", "jekhov", "examples", "synthetic-plan.json"),
+		"--output",
+		validationReportPath,
+	]);
+	const validationReport = JSON.parse(await readFile(validationReportPath, "utf8"));
+	if (
+		validationReport.valid !== true ||
+		validationReport.executed !== false ||
+		validationReport.providerRequestCount !== 0
+	) {
+		throw new Error("installed jekhov bin did not validate a packaged plan offline");
+	}
 	const wrapper = await execFileAsync(join(binDirectory, "jekhov-jev-client"), ["--help"]);
 	if (!wrapper.stdout.includes("public|synthetic")) {
 		throw new Error("installed Jev policy wrapper did not run");
@@ -60,7 +84,7 @@ try {
 		[
 			"--input-type=module",
 			"--eval",
-			"const packageRoot = await import('jekhov'); if (typeof packageRoot.runShadowSelection !== 'function' || typeof packageRoot.JEKHOV_VERSION !== 'string') process.exit(17);",
+			"const packageRoot = await import('jekhov'); if (typeof packageRoot.runShadowSelection !== 'function' || typeof packageRoot.validateArtifact !== 'function' || typeof packageRoot.JEKHOV_VERSION !== 'string') process.exit(17);",
 		],
 		{ cwd: installDirectory, env: npmEnvironment, maxBuffer: 1024 * 1024 },
 	);

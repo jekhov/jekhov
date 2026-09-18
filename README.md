@@ -44,6 +44,16 @@ npx jekhov demo
 prints a report with `executed: false`. It does not perform the proposed action. On a machine with a
 system Chromium, add `--chromium /path/to/chromium`.
 
+Validate a plan before opening a browser or making a provider request:
+
+```sh
+npx jekhov validate --plan your-plan.json
+npx jekhov validate --corpus your-corpus.json
+npx jekhov validate --pricing your-pricing.json
+```
+
+Each command accepts `--output REPORT.json` and emits a content-minimized structural summary.
+
 To inspect the repository fixture without making a Jev request:
 
 ```sh
@@ -67,6 +77,10 @@ node dist/cli.js inspect --plan examples/synthetic-plan.json
   values.
 - Production requests go through a bundled policy-enforcing subprocess using TypeSafe's official
   SDK. Jekhov contains no direct provider HTTP implementation.
+- Plan, corpus, pricing, selector-response, cache, and baseline JSON inputs are bounded before
+  parsing. Durable JSON reports are atomically replaced with private file permissions.
+- Accessibility snapshot traversal has a fixed 25,000-entry ceiling and handles cyclic library
+  input without looping.
 - Executable synthetic tasks require one uniquely matching oracle label, a fresh matching
   accessibility reference, deterministic postconditions, and explicit step/request/time budgets.
 - Fresh-browser data fixtures run in an offline Playwright context with service workers blocked.

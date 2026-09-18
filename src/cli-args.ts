@@ -4,6 +4,10 @@ import type { Result } from "./types.js";
 
 export type CliOptions =
 	| { command: "help" }
+	| { command: "version" }
+	| { command: "validate"; planPath: string; outputPath?: string }
+	| { command: "validate"; corpusPath: string; outputPath?: string }
+	| { command: "validate"; pricingPath: string; outputPath?: string }
 	| {
 			command: "demo";
 			outputPath?: string;
@@ -49,6 +53,7 @@ function parseFlagValues(
 	for (let index = start; index < argv.length; index += 2) {
 		const flag = argv[index];
 		if (!flag || !allowed.has(flag)) return invalid(`unknown argument: ${flag ?? "(missing)"}`);
+		if (Object.hasOwn(values, flag)) return invalid(`duplicate argument: ${flag}`);
 		const value = argv[index + 1];
 		if (!value || value.startsWith("--")) return invalid(`${flag} requires a value`);
 		values[flag] = value;
@@ -137,8 +142,35 @@ function parseMiniwobArgs(argv: string[]): Result<CliOptions> {
 
 export function parseCliArgs(argv: string[]): Result<CliOptions> {
 	if (argv[0] === "--help" || argv[0] === "-h") return { ok: true, value: { command: "help" } };
+	if (argv[0] === "--version" || argv[0] === "-v") {
+		return { ok: true, value: { command: "version" } };
+	}
 	const command = argv[0];
 	if (command === "miniwob") return parseMiniwobArgs(argv);
+	if (command === "validate") {
+		const parsedValues = parseFlagValues(
+			argv,
+			1,
+			new Set(["--corpus", "--output", "--plan", "--pricing"]),
+		);
+		if (!parsedValues.ok) return parsedValues;
+		const values = parsedValues.value;
+		const inputs = ["--plan", "--corpus", "--pricing"].filter((flag) => values[flag]);
+		if (inputs.length !== 1) {
+			return invalid("validate requires exactly one of --plan, --corpus, or --pricing");
+		}
+		const shared = {
+			command: "validate" as const,
+			...(values["--output"] ? { outputPath: values["--output"] } : {}),
+		};
+		if (values["--plan"]) {
+			return { ok: true, value: { ...shared, planPath: values["--plan"] } };
+		}
+		if (values["--corpus"]) {
+			return { ok: true, value: { ...shared, corpusPath: values["--corpus"] } };
+		}
+		return { ok: true, value: { ...shared, pricingPath: values["--pricing"] as string } };
+	}
 	if (
 		command !== "demo" &&
 		command !== "evaluate" &&
@@ -146,7 +178,7 @@ export function parseCliArgs(argv: string[]): Result<CliOptions> {
 		command !== "shadow" &&
 		command !== "task"
 	) {
-		return invalid("command must be demo, evaluate, inspect, miniwob, shadow, or task");
+		return invalid("command must be demo, evaluate, inspect, miniwob, shadow, task, or validate");
 	}
 
 	const allowed = new Set(

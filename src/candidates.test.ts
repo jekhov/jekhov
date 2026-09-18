@@ -1,6 +1,6 @@
 // pattern: Functional Core
 import { describe, expect, it } from "vitest";
-import { collectActionCandidates } from "./candidates.js";
+import { collectActionCandidates, MAX_SNAPSHOT_ENTRIES } from "./candidates.js";
 
 const snapshot = [
 	{
@@ -178,6 +178,47 @@ describe("collectActionCandidates", () => {
 				candidates: [{ name: "Deep target", context: ["Layer 1", "Layer 0"] }],
 				omittedCount: 0,
 			},
+		});
+	});
+
+	it("rejects snapshots that exceed the deterministic traversal budget", () => {
+		expect(
+			collectActionCandidates(
+				Array.from({ length: MAX_SNAPSHOT_ENTRIES + 1 }, () => "text"),
+				{
+					action: "click",
+				},
+			),
+		).toEqual({
+			ok: false,
+			error: {
+				code: "snapshot-too-large",
+				message: `accessibility snapshot exceeds ${MAX_SNAPSHOT_ENTRIES} entries`,
+			},
+		});
+	});
+
+	it("rejects oversized nested child lists before adding them to the traversal stack", () => {
+		expect(
+			collectActionCandidates(
+				[
+					{
+						role: "group",
+						children: Array.from({ length: MAX_SNAPSHOT_ENTRIES }, () => "text"),
+					},
+				],
+				{ action: "click" },
+			),
+		).toMatchObject({ ok: false, error: { code: "snapshot-too-large" } });
+	});
+
+	it("does not loop when a library caller supplies a cyclic snapshot", () => {
+		const cyclic: Record<string, unknown> = { role: "group", name: "Cycle" };
+		cyclic.children = [cyclic, { role: "button", name: "Continue", ref: "e1" }];
+
+		expect(collectActionCandidates([cyclic], { action: "click" })).toMatchObject({
+			ok: true,
+			value: { candidates: [{ name: "Continue" }], omittedCount: 0 },
 		});
 	});
 });

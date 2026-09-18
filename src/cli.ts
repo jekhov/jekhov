@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pattern: Imperative Shell
 import { realpathSync } from "node:fs";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs } from "./cli-args.js";
@@ -18,10 +18,17 @@ import { createPlaywrightObserver } from "./playwright-observer.js";
 import { runSyntheticTaskInNewBrowser } from "./playwright-task-page.js";
 import { parseShadowPlan } from "./policy.js";
 import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
+import { FileTooLargeError, readBoundedJson, writePrivateJson } from "./private-json-file.js";
+import { JEKHOV_VERSION } from "./report-metadata.js";
 import { runShadowSelection } from "./shadow-run.js";
 import type { Failure, Result, ShadowPlan } from "./types.js";
+import { type ValidationArtifactKind, validateArtifact } from "./validation.js";
 
 const USAGE = `Usage:
+  jekhov --version
+  jekhov validate --plan PLAN.json [--output REPORT.json]
+  jekhov validate --corpus CORPUS.json [--output REPORT.json]
+  jekhov validate --pricing RATES.json [--output REPORT.json]
   jekhov demo [--chromium PATH] [--output REPORT.json]
   jekhov inspect --plan PLAN.json [--chromium PATH] [--output REPORT.json]
   jekhov shadow --plan PLAN.json [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
@@ -30,6 +37,7 @@ const USAGE = `Usage:
   jekhov miniwob run --root MINIWOB_ROOT [--tasks NAMES] [--seeds SPEC] [--jev-client PATH] [--chromium PATH] [--output REPORT.json]
   jekhov evaluate --corpus CORPUS.json [--baseline-client PATH] [--jev-client PATH] [--pricing RATES.json] [--output REPORT.json]
 
+validate checks one artifact without opening a browser or making a provider request.
 demo runs one bundled synthetic shadow selection. inspect costs no Jev request.
 shadow proposes an element but never acts.
 task executes only labeled, oracle-gated synthetic steps with deterministic postconditions.
@@ -37,6 +45,8 @@ miniwob capture builds a labeled corpus without Jev; miniwob run executes the or
 evaluate replays a declared public or synthetic corpus through selector wrappers; it never opens a browser or acts.`;
 
 const MAX_CORPUS_BYTES = 5 * 1024 * 1024;
+const MAX_PLAN_BYTES = 1024 * 1024;
+const MAX_PRICING_BYTES = 1024 * 1024;
 const BASELINE_WRAPPER_TIMEOUT_MS = 130_000;
 const DEMO_PLAN: ShadowPlan = {
 	version: 1,
@@ -60,25 +70,23 @@ const DEMO_PLAN: ShadowPlan = {
 
 async function readJson(
 	path: string,
-	options: { failureCode: string; maximumBytes?: number },
+	options: {
+		failureCode: string;
+		maximumBytes: number;
+		tooLargeCode: string;
+		inputName: string;
+	},
 ): Promise<Result<unknown>> {
 	try {
-		const text = await readFile(resolve(path), "utf8");
-		if (options.maximumBytes && Buffer.byteLength(text) > options.maximumBytes) {
-			return {
-				ok: false,
-				error: {
-					code: "corpus-too-large",
-					message: `corpus exceeds ${options.maximumBytes} bytes`,
-				},
-			};
-		}
-		return { ok: true, value: JSON.parse(text) };
+		return {
+			ok: true,
+			value: await readBoundedJson(path, options.maximumBytes, options.inputName),
+		};
 	} catch (error) {
 		return {
 			ok: false,
 			error: {
-				code: options.failureCode,
+				code: error instanceof FileTooLargeError ? options.tooLargeCode : options.failureCode,
 				message: error instanceof Error ? error.message : "Could not read JSON input",
 			},
 		};
@@ -86,12 +94,9 @@ async function readJson(
 }
 
 async function emit(value: unknown, outputPath?: string): Promise<void> {
-	const text = `${JSON.stringify(value, null, 2)}\n`;
 	if (outputPath) {
-		const absolute = resolve(outputPath);
-		await writeFile(absolute, text, { mode: 0o600 });
-		await chmod(absolute, 0o600);
-	} else process.stdout.write(text);
+		await writePrivateJson(outputPath, value);
+	} else process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
 function reportFailure(failure: Failure): number {
@@ -139,12 +144,54 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		process.stdout.write(`${USAGE}\n`);
 		return 0;
 	}
+	if (parsedArgs.value.command === "version") {
+		process.stdout.write(`${JEKHOV_VERSION}\n`);
+		return 0;
+	}
 	const preparedOutput = await prepareOutputDirectory(parsedArgs.value.outputPath);
 	if (!preparedOutput.ok) return reportFailure(preparedOutput.error);
+	if (parsedArgs.value.command === "validate") {
+		let kind: ValidationArtifactKind;
+		let inputPath: string;
+		let maximumBytes: number;
+		let failureCode: string;
+		let tooLargeCode: string;
+		if ("planPath" in parsedArgs.value) {
+			kind = "plan";
+			inputPath = parsedArgs.value.planPath;
+			maximumBytes = MAX_PLAN_BYTES;
+			failureCode = "plan-read-failed";
+			tooLargeCode = "plan-too-large";
+		} else if ("corpusPath" in parsedArgs.value) {
+			kind = "corpus";
+			inputPath = parsedArgs.value.corpusPath;
+			maximumBytes = MAX_CORPUS_BYTES;
+			failureCode = "corpus-read-failed";
+			tooLargeCode = "corpus-too-large";
+		} else {
+			kind = "pricing";
+			inputPath = parsedArgs.value.pricingPath;
+			maximumBytes = MAX_PRICING_BYTES;
+			failureCode = "pricing-read-failed";
+			tooLargeCode = "pricing-too-large";
+		}
+		const loaded = await readJson(inputPath, {
+			failureCode,
+			maximumBytes,
+			tooLargeCode,
+			inputName: kind,
+		});
+		if (!loaded.ok) return reportFailure(loaded.error);
+		const validated = validateArtifact(kind, loaded.value);
+		if (!validated.ok) return reportFailure(validated.error);
+		return emitResult(validated.value, parsedArgs.value.outputPath);
+	}
 	if (parsedArgs.value.command === "evaluate") {
 		const loadedCorpus = await readJson(parsedArgs.value.corpusPath, {
 			failureCode: "corpus-read-failed",
 			maximumBytes: MAX_CORPUS_BYTES,
+			tooLargeCode: "corpus-too-large",
+			inputName: "corpus",
 		});
 		if (!loadedCorpus.ok) return reportFailure(loadedCorpus.error);
 		const corpus = parseEvaluationCorpus(loadedCorpus.value);
@@ -153,6 +200,9 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		if (parsedArgs.value.pricingPath) {
 			const loadedPricing = await readJson(parsedArgs.value.pricingPath, {
 				failureCode: "pricing-read-failed",
+				maximumBytes: MAX_PRICING_BYTES,
+				tooLargeCode: "pricing-too-large",
+				inputName: "pricing",
 			});
 			if (!loadedPricing.ok) return reportFailure(loadedPricing.error);
 			const parsedPricing = parseEvaluationPricing(loadedPricing.value);
@@ -211,7 +261,12 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		return emitResult(result.value, parsedArgs.value.outputPath);
 	}
 	if (parsedArgs.value.command === "task") {
-		const loaded = await readJson(parsedArgs.value.planPath, { failureCode: "plan-read-failed" });
+		const loaded = await readJson(parsedArgs.value.planPath, {
+			failureCode: "plan-read-failed",
+			maximumBytes: MAX_PLAN_BYTES,
+			tooLargeCode: "plan-too-large",
+			inputName: "plan",
+		});
 		if (!loaded.ok) return reportFailure(loaded.error);
 		const executablePath =
 			parsedArgs.value.chromiumPath ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
@@ -226,7 +281,12 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 
 	let rawPlan: unknown = DEMO_PLAN;
 	if (parsedArgs.value.command !== "demo") {
-		const loaded = await readJson(parsedArgs.value.planPath, { failureCode: "plan-read-failed" });
+		const loaded = await readJson(parsedArgs.value.planPath, {
+			failureCode: "plan-read-failed",
+			maximumBytes: MAX_PLAN_BYTES,
+			tooLargeCode: "plan-too-large",
+			inputName: "plan",
+		});
 		if (!loaded.ok) return reportFailure(loaded.error);
 		rawPlan = loaded.value;
 	}

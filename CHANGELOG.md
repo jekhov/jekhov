@@ -2,6 +2,23 @@
 
 All notable changes to Jekhov are documented here.
 
+## Unreleased
+
+### Added
+
+- Added offline `validate` commands for plans, evaluation corpora, and pricing files, plus
+  `--version` output and a public validation API.
+
+### Changed
+
+- Bounded plan, pricing, wrapper-response, cache, and baseline JSON reads before parsing.
+- Added a deterministic accessibility-snapshot traversal ceiling and safe handling for cyclic
+  library input.
+- Made durable JSON writes atomic, symlink-safe, and private by default.
+- Reject duplicate CLI flags instead of silently accepting the last value.
+- Added version and policy fingerprints to inspect reports.
+- Reused `happy-dom` environments through Vitest's VM-thread pool to reduce test startup overhead.
+
 ## 0.1.1 - 2026-09-18
 
 Documentation-only patch release.

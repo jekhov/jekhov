@@ -4,6 +4,7 @@ import type { ActionCandidate, BrowserAction, CandidateSet, Result } from "./typ
 const DEFAULT_LIMIT = 48;
 const MAX_LIMIT = 63;
 const TEXT_LIMIT = 160;
+export const MAX_SNAPSHOT_ENTRIES = 25_000;
 
 const ACTION_ROLES: Record<BrowserAction, ReadonlySet<string>> = {
 	check: new Set(["checkbox", "radio", "switch"]),
@@ -98,6 +99,15 @@ export function collectActionCandidates(
 			},
 		};
 	}
+	if (snapshot.length > MAX_SNAPSHOT_ENTRIES) {
+		return {
+			ok: false,
+			error: {
+				code: "snapshot-too-large",
+				message: `accessibility snapshot exceeds ${MAX_SNAPSHOT_ENTRIES} entries`,
+			},
+		};
+	}
 	const limit = options.limit ?? DEFAULT_LIMIT;
 	if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
 		return {
@@ -108,7 +118,9 @@ export function collectActionCandidates(
 
 	const found: ActionCandidate[] = [];
 	const seenRefs = new Set<string>();
+	const seenNodes = new WeakSet<object>();
 	let matchingCount = 0;
+	let traversedEntries = 0;
 
 	const pending: Array<{ value: unknown; context: string[] }> = [];
 	for (let index = snapshot.length - 1; index >= 0; index -= 1) {
@@ -116,7 +128,11 @@ export function collectActionCandidates(
 	}
 	while (pending.length > 0) {
 		const entry = pending.pop();
-		if (!entry || typeof entry.value === "string" || !isRecord(entry.value)) continue;
+		if (!entry) continue;
+		traversedEntries += 1;
+		if (typeof entry.value === "string" || !isRecord(entry.value)) continue;
+		if (seenNodes.has(entry.value)) continue;
+		seenNodes.add(entry.value);
 		const value = entry.value;
 		if (isCandidate(value, options.action)) {
 			const ref = cleanText(value.ref);
@@ -132,9 +148,19 @@ export function collectActionCandidates(
 		const name = cleanText(value.name);
 		const childContext =
 			role && name && CONTEXT_ROLES.has(role) ? [...entry.context.slice(-1), name] : entry.context;
-		if (Array.isArray(value.children)) {
-			for (let index = value.children.length - 1; index >= 0; index -= 1) {
-				pending.push({ value: value.children[index], context: childContext });
+		const children = value.children;
+		if (Array.isArray(children)) {
+			if (traversedEntries + pending.length + children.length > MAX_SNAPSHOT_ENTRIES) {
+				return {
+					ok: false,
+					error: {
+						code: "snapshot-too-large",
+						message: `accessibility snapshot exceeds ${MAX_SNAPSHOT_ENTRIES} entries`,
+					},
+				};
+			}
+			for (let index = children.length - 1; index >= 0; index -= 1) {
+				pending.push({ value: children[index], context: childContext });
 			}
 		}
 	}

@@ -6,6 +6,7 @@ export default defineConfig({
 		environment: "happy-dom",
 		hookTimeout: 10_000,
 		passWithNoTests: true,
+		pool: "vmThreads",
 		testTimeout: 10_000,
 		coverage: {
 			provider: "v8",
@@ -23,6 +24,7 @@ export default defineConfig({
 				"src/miniwob-run.ts",
 				"src/playwright-observer.ts",
 				"src/playwright-task-page.ts",
+				"src/private-json-file.ts",
 				"src/synthetic-task-run.ts",
 			],
 			thresholds: {
