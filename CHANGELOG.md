@@ -1,0 +1,26 @@
+# Changelog
+
+All notable changes to Jekhov are documented here.
+
+## 0.1.0 - 2026-09-18
+
+Initial public release.
+
+### Added
+
+- Policy-bounded Jev target selection for preplanned Playwright actions.
+- Shadow-only public-site observation with explicit source policy and data minimization.
+- A bundled TypeSafe SDK wrapper with request validation, pinned provider settings, provenance,
+  usage reporting, and a private content-addressed cache.
+- Existing-page integration for caller-owned Playwright `Page` objects.
+- Labeled synthetic multi-step execution with deterministic postconditions and resource budgets.
+- A reproducible five-template MiniWoB++ grounding and execution slice.
+- Public synthetic corpora, selector evaluation, calibration, and fallback analysis.
+- Per-action selector cascade routing for errors, abstention, invalid output, and low confidence.
+
+### Boundaries
+
+- Public-site runs produce proposals and never execute browser actions.
+- Complete execution is restricted to labeled synthetic fixtures and the pinned MiniWoB++ slice.
+- Private or client data is unsupported.
+- The release does not provide autonomous browser planning.

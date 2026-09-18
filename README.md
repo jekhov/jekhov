@@ -1,7 +1,10 @@
 # Jekhov
 
-Policy-bounded [Jev](https://github.com/typesafe-ai/jev) element selection and calibration for
-standard [Playwright](https://playwright.dev/).
+Jekhov makes known [Playwright](https://playwright.dev/) workflows more resilient by using
+[Jev](https://github.com/typesafe-ai/jev) only where element selection requires judgment.
+
+The workflow, next action, and success condition stay deterministic. Jekhov chooses an eligible
+target or abstains behind explicit policy, budget, and data boundaries.
 
 Status: experimental `0.1.0`. The public-site runner remains shadow-only. A separately labeled,
 synthetic-only task harness can execute complete multi-step fixtures and a pinned MiniWoB++ slice
@@ -42,7 +45,7 @@ system Chromium, add `--chromium /path/to/chromium`.
 To inspect the repository fixture without making a Jev request:
 
 ```sh
-git clone https://github.com/proptermalone/jekhov.git
+git clone https://github.com/jekhov/jekhov.git
 cd jekhov
 npm install
 npm run build

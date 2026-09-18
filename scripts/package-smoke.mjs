@@ -7,11 +7,12 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const directory = await mkdtemp(join(tmpdir(), "jekhov-package-smoke-"));
+const npmEnvironment = { ...process.env, npm_config_dry_run: "false" };
 try {
 	const { stdout } = await execFileAsync(
 		"npm",
 		["pack", "--pack-destination", directory, "--json"],
-		{ maxBuffer: 1024 * 1024 },
+		{ env: npmEnvironment, maxBuffer: 1024 * 1024 },
 	);
 	const report = JSON.parse(stdout);
 	const packed = report[0];
@@ -26,6 +27,7 @@ try {
 		"corpora/synthetic-v2.json",
 		"corpora/miniwob-v1.json",
 		"corpora/README.md",
+		"CHANGELOG.md",
 		"README.md",
 		"LICENSE",
 	];
@@ -42,7 +44,7 @@ try {
 	await execFileAsync(
 		"npm",
 		["install", join(directory, packed.filename), "--no-audit", "--no-fund"],
-		{ cwd: installDirectory, maxBuffer: 1024 * 1024 },
+		{ cwd: installDirectory, env: npmEnvironment, maxBuffer: 1024 * 1024 },
 	);
 	const binDirectory = join(installDirectory, "node_modules", ".bin");
 	const cli = await execFileAsync(join(binDirectory, "jekhov"), ["--help"]);
