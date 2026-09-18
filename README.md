@@ -1,7 +1,7 @@
 # Jekhov
 
-Jekhov makes known [Playwright](https://playwright.dev/) workflows more resilient by using
-[Jev](https://github.com/typesafe-ai/jev) only where element selection requires judgment.
+Jekhov is an npm library and CLI that makes known [Playwright](https://playwright.dev/) workflows
+more resilient by using [Jev](https://typesafe.ai/) only where element selection requires judgment.
 
 The workflow, next action, and success condition stay deterministic. Jekhov chooses an eligible
 target or abstains behind explicit policy, budget, and data boundaries.
@@ -264,7 +264,7 @@ The repo-owned baseline requires a logged-in Codex CLI. It pins `gpt-5.6-luna` a
 runs ephemerally in a read-only sandbox, ignores user and project configuration, removes API-key
 environment variables, and fails if Codex invokes a tool. Its non-interactive structured-output
 interface is covered in the
-[official OpenAI documentation](https://developers.openai.com/docs/non-interactive-mode).
+[official OpenAI documentation](https://learn.chatgpt.com/docs/non-interactive-mode).
 
 The external benchmark path starts with the implemented pinned MiniWoB++ grounding and execution
 slice; a Mind2Web candidate-selection adapter remains later work. See
@@ -284,8 +284,8 @@ tests but are excluded from that numerical gate.
 
 ## Related work
 
-- [vlad-terin/jev-browser](https://github.com/vlad-terin/jev-browser) implements a bounded
-  plan/select/act/verify loop with Jev.
+- [Ying-Kai-Liao/jev-browser](https://github.com/Ying-Kai-Liao/jev-browser) provides a library,
+  CLI, and MCP server where an LLM plans and Jev selects browser actions.
 - [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast) implements goal-driven
   operation and target selection over Chrome CDP.
 
