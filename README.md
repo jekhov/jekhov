@@ -81,7 +81,7 @@ Compare Jev with a general-model selector wrapper that implements the same file-
 ```sh
 node dist/cli.js evaluate \
   --corpus corpora/synthetic-v1.json \
-  --baseline-client /path/to/general-model-wrapper.mjs \
+  --baseline-client dist/codex-baseline-client.js \
   --output reports/synthetic-v1.json
 ```
 
@@ -94,6 +94,12 @@ The report separates explicit provider abstention from deterministic no-candidat
 correctness, proposal precision, abstention rates, request bytes, elapsed time, numeric usage fields,
 and wrapper-reported USD cost. Missing cost stays missing; Jekhov does not estimate it from token
 counts. This selector comparison is not yet a full general-model Playwright-agent baseline.
+
+The repo-owned baseline requires a logged-in Codex CLI. It pins `gpt-5.6-luna` at low reasoning
+effort, runs ephemerally in a read-only sandbox, ignores user/project configuration, removes API-key
+environment variables, and fails if Codex invokes a tool. It preserves Codex token usage but cannot
+report a USD cost for ChatGPT-managed authentication. Codex's non-interactive structured-output
+interface is documented in the [official OpenAI documentation](https://developers.openai.com/docs/non-interactive-mode).
 
 ## Plan format
 

@@ -17,7 +17,7 @@ describe("runCli evaluate", () => {
 		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-test-"));
 		temporaryDirectories.push(directory);
 		const clientPath = join(directory, "selector-client.mjs");
-		const outputPath = join(directory, "report.json");
+		const outputPath = join(directory, "missing", "nested", "report.json");
 		await writeFile(
 			clientPath,
 			`import { readFileSync, writeFileSync } from "node:fs";

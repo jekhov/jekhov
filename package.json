@@ -8,7 +8,8 @@
 		"node": ">=22"
 	},
 	"bin": {
-		"jekhov": "./dist/cli.js"
+		"jekhov": "./dist/cli.js",
+		"jekhov-codex-baseline": "./dist/codex-baseline-client.js"
 	},
 	"exports": {
 		".": {

@@ -122,3 +122,13 @@ Not: browser-agent benchmarking, an action threshold, or evidence that a propose
 
 Invariant: execution is sequential and bounded to at most one wrapper request per selector per
 case; no browser action exists on this path.
+
+## General-model selector baseline
+
+A conventional general model answering the same bounded selection request as Jev, with candidate
+eligibility and scoring held constant.
+
+Not: a full browser agent operating on a raw page observation.
+
+Invariant: the baseline may choose a candidate or abstain but cannot browse, call tools, modify the
+candidate set, or execute a browser action.

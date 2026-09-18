@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // pattern: Imperative Shell
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs } from "./cli-args.js";
 import { parseEvaluationCorpus } from "./evaluation-corpus.js";
@@ -23,6 +23,7 @@ inspect costs no Jev request. shadow proposes an element but never acts.
 evaluate replays a private corpus through Jev and baseline wrappers; it never opens a browser or acts.`;
 
 const MAX_CORPUS_BYTES = 5 * 1024 * 1024;
+const BASELINE_WRAPPER_TIMEOUT_MS = 130_000;
 
 async function readJson(
 	path: string,
@@ -78,6 +79,22 @@ async function emitResult(value: unknown, outputPath?: string): Promise<number> 
 	}
 }
 
+async function prepareOutputDirectory(outputPath?: string): Promise<Result<undefined>> {
+	if (!outputPath) return { ok: true, value: undefined };
+	try {
+		await mkdir(dirname(resolve(outputPath)), { recursive: true, mode: 0o700 });
+		return { ok: true, value: undefined };
+	} catch (error) {
+		return {
+			ok: false,
+			error: {
+				code: "report-directory-failed",
+				message: error instanceof Error ? error.message : "Could not prepare report directory",
+			},
+		};
+	}
+}
+
 export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 	const parsedArgs = parseCliArgs(argv);
 	if (!parsedArgs.ok) return reportFailure(parsedArgs.error);
@@ -85,6 +102,8 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		process.stdout.write(`${USAGE}\n`);
 		return 0;
 	}
+	const preparedOutput = await prepareOutputDirectory(parsedArgs.value.outputPath);
+	if (!preparedOutput.ok) return reportFailure(preparedOutput.error);
 	if (parsedArgs.value.command === "evaluate") {
 		const loadedCorpus = await readJson(parsedArgs.value.corpusPath, {
 			failureCode: "corpus-read-failed",
@@ -106,6 +125,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 				evaluator: createSelectionCliEvaluator({
 					clientPath: parsedArgs.value.baselineClientPath,
 					failureCode: "baseline-client-failed",
+					timeoutMs: BASELINE_WRAPPER_TIMEOUT_MS,
 				}),
 			},
 		]);

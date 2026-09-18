@@ -76,9 +76,12 @@ pipeline abstention, request bytes, latency, numeric usage fields, and wrapper-r
 Each report hashes the normalized corpus, including its labels. The harness does not infer cost from
 tokens and does not set an action threshold.
 
-The current baseline adapter sees the same bounded selection request as Jev. That isolates selector
-quality and cost; it is not yet the full general-model Playwright baseline over raw observations.
-That broader comparison remains required before claiming an end-to-end cost advantage.
+The repo-owned general-model baseline sees the same bounded selection request as Jev. It runs
+`gpt-5.6-luna` at low reasoning effort through ephemeral, read-only `codex exec`, ignores user and
+project rules, strips API-key environment variables, and rejects any tool-use event. Structured
+output constrains its answer to the candidate IDs plus abstention. This isolates selector quality,
+usage, and latency; it is not the full general-model Playwright baseline over raw observations. That
+broader comparison remains required before claiming an end-to-end cost advantage.
 
 ## Data acquisition
 
