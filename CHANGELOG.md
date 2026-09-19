@@ -14,10 +14,19 @@ All notable changes to Jekhov are documented here.
 - Bounded plan, pricing, wrapper-response, cache, and baseline JSON reads before parsing.
 - Added a deterministic accessibility-snapshot traversal ceiling and safe handling for cyclic
   library input.
-- Made durable JSON writes atomic, symlink-safe, and private by default.
-- Reject duplicate CLI flags instead of silently accepting the last value.
+- Made durable JSON writes atomic, symlink-safe, private by default, and unwilling to replace
+  devices, FIFOs, sockets, or directories.
+- Reject duplicate CLI flags across all three shipped binaries instead of silently accepting the
+  last value.
 - Added version and policy fingerprints to inspect reports.
 - Reused `happy-dom` environments through Vitest's VM-thread pool to reduce test startup overhead.
+
+### Fixed
+
+- Kept the Codex baseline's bounded file envelope large enough for pretty-printed requests that are
+  valid under its compact 60,000-byte semantic limit.
+- Reject non-regular JSON inputs without blocking, and refuse validation output paths that resolve
+  to the input artifact.
 
 ## 0.1.1 - 2026-09-18
 

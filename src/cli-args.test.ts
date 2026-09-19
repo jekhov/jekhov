@@ -9,15 +9,16 @@ describe("parseCliArgs", () => {
 	});
 
 	it.each([
-		["--plan", "plan.json", "planPath"],
-		["--corpus", "corpus.json", "corpusPath"],
-		["--pricing", "pricing.json", "pricingPath"],
-	] as const)("parses validation for %s", (flag, path, key) => {
+		["--plan", "plan.json", "plan"],
+		["--corpus", "corpus.json", "corpus"],
+		["--pricing", "pricing.json", "pricing"],
+	] as const)("parses validation for %s", (flag, path, artifactType) => {
 		expect(parseCliArgs(["validate", flag, path, "--output", "validation.json"])).toEqual({
 			ok: true,
 			value: {
 				command: "validate",
-				[key]: path,
+				artifactType,
+				inputPath: path,
 				outputPath: "validation.json",
 			},
 		});

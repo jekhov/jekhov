@@ -3,6 +3,10 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	CODEX_BASELINE_REQUEST_FILE_LIMIT,
+	CODEX_BASELINE_REQUEST_LIMIT,
+} from "./codex-baseline.js";
 import { runCodexBaselineClient } from "./codex-baseline-client.js";
 import { buildSelectionRequest } from "./selection.js";
 
@@ -88,6 +92,78 @@ describe("runCodexBaselineClient", () => {
 				unambiguous_match: { noul: 0.88 },
 			},
 		});
+	});
+
+	it("accepts a pretty-printed request that is within the compact semantic limit", async () => {
+		const fixture = await fixtureFiles();
+		const request = buildSelectionRequest({
+			goal: "G".repeat(500),
+			action: "click",
+			pageUrl: `https://example.com/${"q/".repeat(60)}`,
+			pageTitle: "T".repeat(200),
+			candidates: Array.from({ length: 27 }, (_, index) => ({
+				id: `c${index}`,
+				ref: `e${index}`,
+				role: "button",
+				name: "N".repeat(160),
+				context: ["A".repeat(120), "B".repeat(120)],
+				url: `https://example.com/${"p/".repeat(60)}`,
+				placeholder: "P".repeat(160),
+				cursor: "pointer",
+			})),
+		});
+		const compact = JSON.stringify(request);
+		const pretty = `${JSON.stringify(request, null, 2)}\n`;
+		expect(Buffer.byteLength(compact)).toBeLessThanOrEqual(CODEX_BASELINE_REQUEST_LIMIT);
+		expect(Buffer.byteLength(pretty)).toBeGreaterThan(CODEX_BASELINE_REQUEST_LIMIT);
+		expect(Buffer.byteLength(pretty)).toBeLessThanOrEqual(CODEX_BASELINE_REQUEST_FILE_LIMIT);
+		await writeFile(fixture.inputPath, pretty, { mode: 0o600 });
+
+		expect(
+			await runCodexBaselineClient(
+				["--data-class", "synthetic", "--input", fixture.inputPath, "--output", fixture.outputPath],
+				{ codexPath: fixture.codexPath, timeoutMs: 1_000 },
+			),
+		).toBe(0);
+	});
+
+	it("rejects duplicate flags before reading input", async () => {
+		const fixture = await fixtureFiles();
+		const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+		expect(
+			await runCodexBaselineClient([
+				"--data-class",
+				"public",
+				"--data-class",
+				"synthetic",
+				"--input",
+				fixture.inputPath,
+				"--output",
+				fixture.outputPath,
+			]),
+		).toBe(1);
+		expect(stderr).toHaveBeenCalledWith(
+			expect.stringContaining("duplicate argument: --data-class"),
+		);
+	});
+
+	it("rejects an oversized request file before starting Codex", async () => {
+		const fixture = await fixtureFiles();
+		await writeFile(fixture.inputPath, " ".repeat(CODEX_BASELINE_REQUEST_FILE_LIMIT + 1));
+		const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+		expect(
+			await runCodexBaselineClient(
+				["--data-class", "synthetic", "--input", fixture.inputPath, "--output", fixture.outputPath],
+				{ codexPath: join(fixture.directory, "must-not-run") },
+			),
+		).toBe(1);
+		expect(stderr).toHaveBeenCalledWith(
+			expect.stringContaining(
+				`baseline request exceeds ${CODEX_BASELINE_REQUEST_FILE_LIMIT} bytes`,
+			),
+		);
 	});
 
 	it("rejects unsupported data before starting Codex", async () => {

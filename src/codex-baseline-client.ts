@@ -11,7 +11,7 @@ import {
 	buildCodexBaselinePrompt,
 	CODEX_BASELINE_MODEL,
 	CODEX_BASELINE_REASONING_EFFORT,
-	CODEX_BASELINE_REQUEST_LIMIT,
+	CODEX_BASELINE_REQUEST_FILE_LIMIT,
 	parseCodexBaselineAnswer,
 	parseCodexBaselineRequest,
 	parseCodexJsonEvents,
@@ -58,6 +58,7 @@ function parseArgs(argv: string[]): Result<ClientOptions> {
 	for (let index = 0; index < argv.length; index += 2) {
 		const flag = argv[index];
 		if (!flag || !allowed.has(flag)) return invalid(`unknown argument: ${flag ?? "(missing)"}`);
+		if (Object.hasOwn(values, flag)) return invalid(`duplicate argument: ${flag}`);
 		const value = argv[index + 1];
 		if (!value || value.startsWith("--")) return invalid(`${flag} requires a value`);
 		values[flag] = value;
@@ -173,7 +174,7 @@ export async function runCodexBaselineClient(
 	try {
 		input = await readBoundedJson(
 			parsedArgs.value.inputPath,
-			CODEX_BASELINE_REQUEST_LIMIT,
+			CODEX_BASELINE_REQUEST_FILE_LIMIT,
 			"baseline request",
 		);
 	} catch (error) {

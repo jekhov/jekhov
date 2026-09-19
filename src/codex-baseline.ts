@@ -4,6 +4,7 @@ import type { Result, SelectionRequest } from "./types.js";
 export const CODEX_BASELINE_MODEL = "gpt-5.6-luna";
 export const CODEX_BASELINE_REASONING_EFFORT = "low";
 export const CODEX_BASELINE_REQUEST_LIMIT = 60_000;
+export const CODEX_BASELINE_REQUEST_FILE_LIMIT = 128 * 1024;
 
 export interface CodexBaselineAnswer {
 	choice: string;

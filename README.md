@@ -78,7 +78,8 @@ node dist/cli.js inspect --plan examples/synthetic-plan.json
 - Production requests go through a bundled policy-enforcing subprocess using TypeSafe's official
   SDK. Jekhov contains no direct provider HTTP implementation.
 - Plan, corpus, pricing, selector-response, cache, and baseline JSON inputs are bounded before
-  parsing. Durable JSON reports are atomically replaced with private file permissions.
+  parsing. Inputs must resolve to regular files. Durable JSON reports are atomically replaced with
+  private file permissions; device, FIFO, socket, and directory targets are rejected.
 - Accessibility snapshot traversal has a fixed 25,000-entry ceiling and handles cyclic library
   input without looping.
 - Executable synthetic tasks require one uniquely matching oracle label, a fresh matching

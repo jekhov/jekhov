@@ -40,37 +40,95 @@ describe("runCli metadata and validation", () => {
 		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-validate-"));
 		temporaryDirectories.push(directory);
 		const outputPath = join(directory, "validation.json");
+		const createBrowserObserver = vi.fn(() => {
+			throw new Error("validation opened a browser");
+		});
+		const createJevEvaluator = vi.fn(() => {
+			throw new Error("validation configured a provider");
+		});
 
-		const code = await runCli([
-			"validate",
-			"--plan",
-			resolve("examples/synthetic-plan.json"),
-			"--output",
-			outputPath,
-		]);
+		const code = await runCli(
+			["validate", "--plan", resolve("examples/synthetic-plan.json"), "--output", outputPath],
+			{ createBrowserObserver, createJevEvaluator },
+		);
 
 		expect(code).toBe(0);
 		const report = JSON.parse(await readFile(outputPath, "utf8")) as ValidationReport;
-		expect(report).toMatchObject({
+		expect(report).toEqual({
+			version: 1,
+			jekhovVersion: "0.1.1",
 			mode: "validation",
 			valid: true,
 			executed: false,
 			browserOpened: false,
 			providerRequestCount: 0,
-			artifact: { kind: "shadow-plan" },
+			artifact: {
+				kind: "shadow-plan",
+				dataClass: "synthetic",
+				actions: ["click"],
+				allowedHostCount: 0,
+			},
 		});
+		expect(createBrowserObserver).not.toHaveBeenCalled();
+		expect(createJevEvaluator).not.toHaveBeenCalled();
 		expect((await stat(outputPath)).mode & 0o777).toBe(0o600);
 	});
 
-	it("rejects an oversized plan before parsing it", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-oversized-"));
+	it.each([
+		["--plan", 1024 * 1024 + 1, "plan-too-large"],
+		["--corpus", 5 * 1024 * 1024 + 1, "corpus-too-large"],
+		["--pricing", 1024 * 1024 + 1, "pricing-too-large"],
+	] as const)(
+		"rejects an oversized %s artifact before parsing it",
+		async (flag, size, errorCode) => {
+			const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-oversized-"));
+			temporaryDirectories.push(directory);
+			const inputPath = join(directory, "input.json");
+			await writeFile(inputPath, " ".repeat(size));
+			const errors = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+			try {
+				expect(await runCli(["validate", flag, inputPath])).toBe(1);
+				expect(errors).toHaveBeenCalledWith(expect.stringContaining(`jekhov: ${errorCode}:`));
+			} finally {
+				errors.mockRestore();
+			}
+		},
+	);
+
+	it("refuses to replace the validation input with its report", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-collision-"));
 		temporaryDirectories.push(directory);
-		const planPath = join(directory, "plan.json");
-		await writeFile(planPath, " ".repeat(2 * 1024 * 1024));
+		const inputPath = join(directory, "plan.json");
+		const original = await readFile(resolve("examples/synthetic-plan.json"), "utf8");
+		await writeFile(inputPath, original);
 		const errors = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 		try {
-			expect(await runCli(["validate", "--plan", planPath])).toBe(1);
-			expect(errors).toHaveBeenCalledWith(expect.stringContaining("jekhov: plan-too-large:"));
+			expect(await runCli(["validate", "--plan", inputPath, "--output", inputPath])).toBe(1);
+			expect(errors).toHaveBeenCalledWith(expect.stringContaining("input-output-conflict"));
+			expect(await readFile(inputPath, "utf8")).toBe(original);
+		} finally {
+			errors.mockRestore();
+		}
+	});
+
+	it("does not create an output directory for an invalid artifact", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "jekhov-cli-invalid-"));
+		temporaryDirectories.push(directory);
+		const inputPath = join(directory, "invalid.json");
+		const outputDirectory = join(directory, "missing", "nested");
+		await writeFile(inputPath, JSON.stringify({ mode: "act" }));
+		const errors = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+		try {
+			expect(
+				await runCli([
+					"validate",
+					"--plan",
+					inputPath,
+					"--output",
+					join(outputDirectory, "out.json"),
+				]),
+			).toBe(1);
+			expect(existsSync(outputDirectory)).toBe(false);
 		} finally {
 			errors.mockRestore();
 		}

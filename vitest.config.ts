@@ -24,7 +24,6 @@ export default defineConfig({
 				"src/miniwob-run.ts",
 				"src/playwright-observer.ts",
 				"src/playwright-task-page.ts",
-				"src/private-json-file.ts",
 				"src/synthetic-task-run.ts",
 			],
 			thresholds: {

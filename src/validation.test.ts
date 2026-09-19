@@ -17,19 +17,22 @@ const shadowPlan = {
 	},
 	step: { id: "next", action: "click", goal: "Open the next results page" },
 };
+const validationReportBase = {
+	version: 1,
+	jekhovVersion: "0.1.1",
+	mode: "validation",
+	valid: true,
+	executed: false,
+	browserOpened: false,
+	providerRequestCount: 0,
+};
 
 describe("validateArtifact", () => {
 	it("summarizes a shadow plan without exposing page content", () => {
 		expect(validateArtifact("plan", shadowPlan)).toEqual({
 			ok: true,
 			value: {
-				version: 1,
-				jekhovVersion: "0.1.1",
-				mode: "validation",
-				valid: true,
-				executed: false,
-				browserOpened: false,
-				providerRequestCount: 0,
+				...validationReportBase,
 				artifact: {
 					kind: "shadow-plan",
 					dataClass: "public",
@@ -64,9 +67,10 @@ describe("validateArtifact", () => {
 			],
 		});
 
-		expect(result).toMatchObject({
+		expect(result).toEqual({
 			ok: true,
 			value: {
+				...validationReportBase,
 				artifact: {
 					kind: "synthetic-task-plan",
 					dataClass: "synthetic",
@@ -97,9 +101,10 @@ describe("validateArtifact", () => {
 				},
 			],
 		});
-		expect(corpus).toMatchObject({
+		expect(corpus).toEqual({
 			ok: true,
 			value: {
+				...validationReportBase,
 				artifact: {
 					kind: "evaluation-corpus",
 					name: "fixture",
@@ -121,9 +126,10 @@ describe("validateArtifact", () => {
 				},
 			},
 		});
-		expect(pricing).toMatchObject({
+		expect(pricing).toEqual({
 			ok: true,
 			value: {
+				...validationReportBase,
 				artifact: {
 					kind: "evaluation-pricing",
 					currency: "USD",
@@ -138,6 +144,16 @@ describe("validateArtifact", () => {
 		expect(validateArtifact("plan", { ...shadowPlan, mode: "act" })).toEqual({
 			ok: false,
 			error: { code: "invalid-plan", message: "plan.mode must be shadow or synthetic-task" },
+		});
+	});
+
+	it("rejects unknown runtime artifact kinds instead of treating them as plans", () => {
+		expect(validateArtifact("shadow-plan" as never, shadowPlan)).toEqual({
+			ok: false,
+			error: {
+				code: "invalid-validation-kind",
+				message: "artifact kind must be plan, corpus, or pricing",
+			},
 		});
 	});
 

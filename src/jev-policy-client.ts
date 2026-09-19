@@ -34,14 +34,23 @@ function parseArgs(argv: string[]): ClientArgs {
 		inputPath: undefined,
 		outputPath: undefined,
 	};
+	const seen = new Set<string>();
 	for (let index = 0; index < argv.length; index += 1) {
 		const argument = argv[index];
+		if (!argument) throw new Error("missing argument");
+		const normalized = argument === "-h" ? "--help" : argument;
+		if (seen.has(normalized)) throw new Error(`duplicate argument: ${argument}`);
+		seen.add(normalized);
 		if (argument === "--dry-run") parsed.dryRun = true;
 		else if (argument === "--help" || argument === "-h") parsed.help = true;
-		else if (argument === "--data-class") parsed.dataClass = argv[++index];
-		else if (argument === "--input") parsed.inputPath = argv[++index];
-		else if (argument === "--output") parsed.outputPath = argv[++index];
-		else throw new Error(`unknown argument: ${argument}`);
+		else if (argument === "--data-class" || argument === "--input" || argument === "--output") {
+			const value = argv[index + 1];
+			if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
+			index += 1;
+			if (argument === "--data-class") parsed.dataClass = value;
+			else if (argument === "--input") parsed.inputPath = value;
+			else parsed.outputPath = value;
+		} else throw new Error(`unknown argument: ${argument}`);
 	}
 	return parsed;
 }

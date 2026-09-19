@@ -45,8 +45,9 @@ action. This preflight is deliberately distinct from inspect mode and shadow mod
    matches the fixture's withheld label and the selector proposes it.
 7. The browser adapter uses Playwright's public `ariaSnapshotJSON()` API. Element references remain
    local and never enter the Jev request.
-8. JSON inputs are size-bounded before parsing. Durable JSON outputs use atomic replacement and
-   private file permissions.
+8. JSON inputs must be regular files and are size-bounded before parsing. Durable JSON outputs use
+   atomic replacement and private file permissions; device, FIFO, socket, and directory targets are
+   rejected.
 9. Accessibility snapshot traversal has a fixed entry budget and terminates safely for cyclic
    library input.
 

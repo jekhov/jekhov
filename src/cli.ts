@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // pattern: Imperative Shell
 import { realpathSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { realpath } from "node:fs/promises";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseCliArgs } from "./cli-args.js";
 import { parseEvaluationCorpus } from "./evaluation-corpus.js";
@@ -21,7 +21,7 @@ import { type EvaluationPricing, parseEvaluationPricing } from "./pricing.js";
 import { FileTooLargeError, readBoundedJson, writePrivateJson } from "./private-json-file.js";
 import { JEKHOV_VERSION } from "./report-metadata.js";
 import { runShadowSelection } from "./shadow-run.js";
-import type { Failure, Result, ShadowPlan } from "./types.js";
+import type { BrowserObserver, Failure, JevEvaluator, Result, ShadowPlan } from "./types.js";
 import { type ValidationArtifactKind, validateArtifact } from "./validation.js";
 
 const USAGE = `Usage:
@@ -48,6 +48,26 @@ const MAX_CORPUS_BYTES = 5 * 1024 * 1024;
 const MAX_PLAN_BYTES = 1024 * 1024;
 const MAX_PRICING_BYTES = 1024 * 1024;
 const BASELINE_WRAPPER_TIMEOUT_MS = 130_000;
+const VALIDATION_INPUTS: Record<
+	ValidationArtifactKind,
+	{ maximumBytes: number; failureCode: string; tooLargeCode: string }
+> = {
+	plan: {
+		maximumBytes: MAX_PLAN_BYTES,
+		failureCode: "plan-read-failed",
+		tooLargeCode: "plan-too-large",
+	},
+	corpus: {
+		maximumBytes: MAX_CORPUS_BYTES,
+		failureCode: "corpus-read-failed",
+		tooLargeCode: "corpus-too-large",
+	},
+	pricing: {
+		maximumBytes: MAX_PRICING_BYTES,
+		failureCode: "pricing-read-failed",
+		tooLargeCode: "pricing-too-large",
+	},
+};
 const DEMO_PLAN: ShadowPlan = {
 	version: 1,
 	mode: "shadow",
@@ -109,6 +129,11 @@ function configuredJevEvaluator(clientPath?: string) {
 	return override ? createJevCliEvaluator({ clientPath: override }) : createBundledJevEvaluator();
 }
 
+interface CliDependencies {
+	createBrowserObserver(options?: { executablePath?: string }): BrowserObserver;
+	createJevEvaluator(clientPath?: string): JevEvaluator;
+}
+
 async function emitResult(value: unknown, outputPath?: string): Promise<number> {
 	try {
 		await emit(value, outputPath);
@@ -121,23 +146,49 @@ async function emitResult(value: unknown, outputPath?: string): Promise<number> 
 	}
 }
 
-async function prepareOutputDirectory(outputPath?: string): Promise<Result<undefined>> {
+async function rejectInputOutputCollision(
+	inputPath: string,
+	outputPath?: string,
+): Promise<Result<undefined>> {
 	if (!outputPath) return { ok: true, value: undefined };
-	try {
-		await mkdir(dirname(resolve(outputPath)), { recursive: true, mode: 0o700 });
-		return { ok: true, value: undefined };
-	} catch (error) {
-		return {
-			ok: false,
-			error: {
-				code: "report-directory-failed",
-				message: error instanceof Error ? error.message : "Could not prepare report directory",
-			},
-		};
+	const inputAbsolute = resolve(inputPath);
+	const outputAbsolute = resolve(outputPath);
+	let conflicts = inputAbsolute === outputAbsolute;
+	if (!conflicts) {
+		try {
+			conflicts = (await realpath(inputAbsolute)) === (await realpath(outputAbsolute));
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				return {
+					ok: false,
+					error: {
+						code: "input-output-check-failed",
+						message:
+							error instanceof Error ? error.message : "Could not compare input and output paths",
+					},
+				};
+			}
+		}
 	}
+	return conflicts
+		? {
+				ok: false,
+				error: {
+					code: "input-output-conflict",
+					message: "validation output must not replace its input artifact",
+				},
+			}
+		: { ok: true, value: undefined };
 }
 
-export async function runCli(argv = process.argv.slice(2)): Promise<number> {
+export async function runCli(
+	argv = process.argv.slice(2),
+	dependencyOverrides: Partial<CliDependencies> = {},
+): Promise<number> {
+	const dependencies: CliDependencies = {
+		createBrowserObserver: dependencyOverrides.createBrowserObserver ?? createPlaywrightObserver,
+		createJevEvaluator: dependencyOverrides.createJevEvaluator ?? configuredJevEvaluator,
+	};
 	const parsedArgs = parseCliArgs(argv);
 	if (!parsedArgs.ok) return reportFailure(parsedArgs.error);
 	if (parsedArgs.value.command === "help") {
@@ -148,41 +199,19 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		process.stdout.write(`${JEKHOV_VERSION}\n`);
 		return 0;
 	}
-	const preparedOutput = await prepareOutputDirectory(parsedArgs.value.outputPath);
-	if (!preparedOutput.ok) return reportFailure(preparedOutput.error);
 	if (parsedArgs.value.command === "validate") {
-		let kind: ValidationArtifactKind;
-		let inputPath: string;
-		let maximumBytes: number;
-		let failureCode: string;
-		let tooLargeCode: string;
-		if ("planPath" in parsedArgs.value) {
-			kind = "plan";
-			inputPath = parsedArgs.value.planPath;
-			maximumBytes = MAX_PLAN_BYTES;
-			failureCode = "plan-read-failed";
-			tooLargeCode = "plan-too-large";
-		} else if ("corpusPath" in parsedArgs.value) {
-			kind = "corpus";
-			inputPath = parsedArgs.value.corpusPath;
-			maximumBytes = MAX_CORPUS_BYTES;
-			failureCode = "corpus-read-failed";
-			tooLargeCode = "corpus-too-large";
-		} else {
-			kind = "pricing";
-			inputPath = parsedArgs.value.pricingPath;
-			maximumBytes = MAX_PRICING_BYTES;
-			failureCode = "pricing-read-failed";
-			tooLargeCode = "pricing-too-large";
-		}
-		const loaded = await readJson(inputPath, {
-			failureCode,
-			maximumBytes,
-			tooLargeCode,
-			inputName: kind,
+		const collision = await rejectInputOutputCollision(
+			parsedArgs.value.inputPath,
+			parsedArgs.value.outputPath,
+		);
+		if (!collision.ok) return reportFailure(collision.error);
+		const inputOptions = VALIDATION_INPUTS[parsedArgs.value.artifactType];
+		const loaded = await readJson(parsedArgs.value.inputPath, {
+			...inputOptions,
+			inputName: parsedArgs.value.artifactType,
 		});
 		if (!loaded.ok) return reportFailure(loaded.error);
-		const validated = validateArtifact(kind, loaded.value);
+		const validated = validateArtifact(parsedArgs.value.artifactType, loaded.value);
 		if (!validated.ok) return reportFailure(validated.error);
 		return emitResult(validated.value, parsedArgs.value.outputPath);
 	}
@@ -212,12 +241,12 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 		const selectors = [
 			{
 				name: "jev",
-				evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+				evaluator: dependencies.createJevEvaluator(parsedArgs.value.jevClientPath),
 				selectionProfile: "choice-with-ambiguity" as const,
 			},
 			{
 				name: "jev-choice-only",
-				evaluator: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+				evaluator: dependencies.createJevEvaluator(parsedArgs.value.jevClientPath),
 				selectionProfile: "choice-only" as const,
 			},
 		];
@@ -255,7 +284,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 				? await captureMiniwobCorpus(sharedOptions)
 				: await runMiniwobBenchmark({
 						...sharedOptions,
-						jev: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+						jev: dependencies.createJevEvaluator(parsedArgs.value.jevClientPath),
 					});
 		if (!result.ok) return reportFailure(result.error);
 		return emitResult(result.value, parsedArgs.value.outputPath);
@@ -272,7 +301,7 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 			parsedArgs.value.chromiumPath ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 		const result = await runSyntheticTaskInNewBrowser(
 			loaded.value,
-			configuredJevEvaluator(parsedArgs.value.jevClientPath),
+			dependencies.createJevEvaluator(parsedArgs.value.jevClientPath),
 			{ ...(executablePath ? { executablePath } : {}) },
 		);
 		if (!result.ok) return reportFailure(result.error);
@@ -294,14 +323,16 @@ export async function runCli(argv = process.argv.slice(2)): Promise<number> {
 	if (!plan.ok) return reportFailure(plan.error);
 	const executablePath =
 		parsedArgs.value.chromiumPath ?? process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-	const browser = createPlaywrightObserver({ ...(executablePath ? { executablePath } : {}) });
+	const browser = dependencies.createBrowserObserver({
+		...(executablePath ? { executablePath } : {}),
+	});
 
 	const result =
 		parsedArgs.value.command === "inspect"
 			? await runInspection(plan.value, browser)
 			: await runShadowSelection(plan.value, {
 					browser,
-					jev: configuredJevEvaluator(parsedArgs.value.jevClientPath),
+					jev: dependencies.createJevEvaluator(parsedArgs.value.jevClientPath),
 				});
 	if (!result.ok) return reportFailure(result.error);
 	return emitResult(result.value, parsedArgs.value.outputPath);

@@ -45,7 +45,7 @@ describe("runInspection", () => {
 			generatedAt: () => new Date("2026-09-18T20:00:00.000Z"),
 		});
 
-		expect(result).toMatchObject({
+		expect(result).toEqual({
 			ok: true,
 			value: {
 				version: 1,
@@ -55,13 +55,23 @@ describe("runInspection", () => {
 				sourcePolicySha256: expect.stringMatching(/^[a-f0-9]{64}$/),
 				mode: "inspect",
 				executed: false,
+				stepId: "next",
 				observedUrl: "https://catalogue.example/[path]?session=[redacted]",
+				pageTitle: "Catalogue",
 				candidates: [
 					{
+						id: "c0",
+						ref: "e1",
+						role: "link",
+						name: "Next",
+						context: [],
 						url: "https://catalogue.example/[path]?page=[redacted]",
 					},
 				],
+				omittedCandidateCount: 0,
 			},
 		});
+		expect(JSON.stringify(result)).not.toContain("session=secret");
+		expect(JSON.stringify(result)).not.toContain("results?page=2");
 	});
 });

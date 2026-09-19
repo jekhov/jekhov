@@ -106,6 +106,15 @@ export function validateArtifact(
 			selectorCount: Object.keys(parsed.value.selectors).length,
 		});
 	}
+	if (kind !== "plan") {
+		return {
+			ok: false,
+			error: {
+				code: "invalid-validation-kind",
+				message: "artifact kind must be plan, corpus, or pricing",
+			},
+		};
+	}
 
 	if (!isRecord(input) || (input.mode !== "shadow" && input.mode !== "synthetic-task")) {
 		return {

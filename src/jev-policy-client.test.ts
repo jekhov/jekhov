@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { JEV_MODEL } from "./jev-policy.js";
+import { JEV_MODEL, MAX_JEV_REQUEST_BYTES } from "./jev-policy.js";
 import { runJevPolicyClient } from "./jev-policy-client.js";
 import { buildSelectionRequest } from "./selection.js";
 
@@ -51,5 +51,30 @@ describe("runJevPolicyClient", () => {
 				validated_only: true,
 			},
 		});
+	});
+
+	it("rejects duplicate flags instead of accepting the last value", async () => {
+		await expect(
+			runJevPolicyClient([
+				"--data-class",
+				"public",
+				"--data-class",
+				"synthetic",
+				"--input",
+				"unused.json",
+				"--dry-run",
+			]),
+		).rejects.toThrow("duplicate argument: --data-class");
+	});
+
+	it("rejects an oversized request before validation or provider setup", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "jekhov-policy-client-oversized-"));
+		temporaryDirectories.push(directory);
+		const inputPath = join(directory, "request.json");
+		await writeFile(inputPath, " ".repeat(MAX_JEV_REQUEST_BYTES + 1));
+
+		await expect(
+			runJevPolicyClient(["--data-class", "synthetic", "--input", inputPath, "--dry-run"]),
+		).rejects.toThrow(`input exceeds ${MAX_JEV_REQUEST_BYTES} bytes`);
 	});
 });

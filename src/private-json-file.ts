@@ -1,6 +1,7 @@
 // pattern: Imperative Shell
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
 export class FileTooLargeError extends Error {
@@ -20,8 +21,10 @@ export async function readBoundedJson(
 ): Promise<unknown> {
 	let file: Awaited<ReturnType<typeof open>> | undefined;
 	try {
-		file = await open(resolve(path), "r");
-		if ((await file.stat()).size > maximumBytes) {
+		file = await open(resolve(path), constants.O_RDONLY | constants.O_NONBLOCK);
+		const metadata = await file.stat();
+		if (!metadata.isFile()) throw new Error(`${label} must be a regular file`);
+		if (metadata.size > maximumBytes) {
 			throw new FileTooLargeError(label, maximumBytes);
 		}
 		const content = Buffer.allocUnsafe(maximumBytes + 1);
@@ -44,6 +47,14 @@ export async function writePrivateJson(path: string, value: unknown): Promise<vo
 	const absolute = resolve(path);
 	const directory = dirname(absolute);
 	await mkdir(directory, { recursive: true, mode: 0o700 });
+	try {
+		const existing = await lstat(absolute);
+		if (!existing.isFile() && !existing.isSymbolicLink()) {
+			throw new Error("output path must be a regular file or symbolic link");
+		}
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+	}
 	const temporaryPath = join(directory, `.${basename(absolute)}.${randomUUID()}.tmp`);
 	try {
 		await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, {
@@ -51,8 +62,8 @@ export async function writePrivateJson(path: string, value: unknown): Promise<vo
 			mode: 0o600,
 		});
 		await rename(temporaryPath, absolute);
-		await chmod(absolute, 0o600);
-	} finally {
+	} catch (error) {
 		await rm(temporaryPath, { force: true }).catch(() => undefined);
+		throw error;
 	}
 }

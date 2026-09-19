@@ -1,13 +1,17 @@
 // pattern: Functional Core
 import { MINIWOB_TASKS, type MiniwobTaskName } from "./miniwob.js";
 import type { Result } from "./types.js";
+import type { ValidationArtifactKind } from "./validation.js";
 
 export type CliOptions =
 	| { command: "help" }
 	| { command: "version" }
-	| { command: "validate"; planPath: string; outputPath?: string }
-	| { command: "validate"; corpusPath: string; outputPath?: string }
-	| { command: "validate"; pricingPath: string; outputPath?: string }
+	| {
+			command: "validate";
+			artifactType: ValidationArtifactKind;
+			inputPath: string;
+			outputPath?: string;
+	  }
 	| {
 			command: "demo";
 			outputPath?: string;
@@ -159,17 +163,21 @@ export function parseCliArgs(argv: string[]): Result<CliOptions> {
 		if (inputs.length !== 1) {
 			return invalid("validate requires exactly one of --plan, --corpus, or --pricing");
 		}
-		const shared = {
-			command: "validate" as const,
-			...(values["--output"] ? { outputPath: values["--output"] } : {}),
+		const selected = inputs[0];
+		if (!selected) return invalid("validate requires an input");
+		const artifactType: ValidationArtifactKind =
+			selected === "--plan" ? "plan" : selected === "--corpus" ? "corpus" : "pricing";
+		const inputPath = values[selected];
+		if (!inputPath) return invalid(`${selected} is required`);
+		return {
+			ok: true,
+			value: {
+				command: "validate",
+				artifactType,
+				inputPath,
+				...(values["--output"] ? { outputPath: values["--output"] } : {}),
+			},
 		};
-		if (values["--plan"]) {
-			return { ok: true, value: { ...shared, planPath: values["--plan"] } };
-		}
-		if (values["--corpus"]) {
-			return { ok: true, value: { ...shared, corpusPath: values["--corpus"] } };
-		}
-		return { ok: true, value: { ...shared, pricingPath: values["--pricing"] as string } };
 	}
 	if (
 		command !== "demo" &&
