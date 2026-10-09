@@ -69,16 +69,16 @@
 		"playwright": "1.63.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.5.14",
-		"@types/node": "22.20.3",
-		"@vitest/coverage-v8": "5.0.1",
-		"fallow": "3.27.0",
+		"@biomejs/biome": "2.5.15",
+		"@types/node": "22.20.5",
+		"@vitest/coverage-v8": "5.0.3",
+		"fallow": "3.31.0",
 		"happy-dom": "20.14.5",
 		"husky": "9.1.7",
-		"knip": "6.36.0",
-		"lint-staged": "17.5.1",
+		"knip": "6.40.0",
+		"lint-staged": "17.6.0",
 		"typescript": "7.0.2",
-		"vitest": "5.0.1"
+		"vitest": "5.0.3"
 	},
 	"lint-staged": {
 		"*.{ts,json,jsonc,md,yml,yaml}": "biome check --write --no-errors-on-unmatched"
